@@ -14,7 +14,18 @@ jobs:
         with:
           toolchain: 1.82.0
       - name: Test Rust engine
-        run: cargo test --locked
+        id: cargo_test
+        continue-on-error: true
+        run: cargo test --locked 2>&1 | tee cargo-test.log
+      - name: Upload compiler log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-test-log
+          path: cargo-test.log
+      - name: Stop after compiler failure
+        if: steps.cargo_test.outcome != 'success'
+        run: exit 1
       - name: Build release binary
         run: cargo build --release --locked
       - name: Build Docker image
