@@ -16,20 +16,20 @@ jobs:
       - name: Test Rust engine
         run: cargo test --locked
       - name: Build release binary
-        id: release_build
+        run: cargo build --release --locked
+      - name: Build Docker image
+        id: docker_build
         continue-on-error: true
-        run: cargo build --release --locked 2>&1 | tee release-build.log
-      - name: Upload release build log
+        run: docker build --progress=plain -t crazy-race-game:ci . 2>&1 | tee docker-build.log
+      - name: Upload Docker build log
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: release-build-log
-          path: release-build.log
-      - name: Stop after release build failure
-        if: steps.release_build.outcome != 'success'
+          name: docker-build-log
+          path: docker-build.log
+      - name: Stop after Docker build failure
+        if: steps.docker_build.outcome != 'success'
         run: exit 1
-      - name: Build Docker image
-        run: docker build -t crazy-race-game:ci .
       - name: Verify original TrumpScript interpreter
         run: |
           docker run --rm --entrypoint /opt/trumpscript/bin/TRUMP \
