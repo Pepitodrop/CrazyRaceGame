@@ -1,6 +1,6 @@
 fn page_shell(title: &str, extra_head: &str, content: &str) -> String {
     format!(
-        r#"<!doctype html>
+        r##"<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -35,7 +35,7 @@ button,.button-link{{min-height:50px;border:0;border-radius:13px;padding:13px 16
 </style>
 </head>
 <body><main>{content}</main></body>
-</html>"#,
+</html>"##,
         title = html_escape(title),
         extra_head = extra_head,
         content = content
