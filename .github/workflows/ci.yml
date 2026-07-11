@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.82.0
+      - name: Test Rust engine
+        run: cargo test --locked
+      - name: Build release binary
+        run: cargo build --release --locked
+      - name: Build Docker image
+        run: docker build -t crazy-race-game:ci .
+      - name: Verify original TrumpScript interpreter
+        run: |
+          docker run --rm --entrypoint /opt/trumpscript/bin/TRUMP \
+            crazy-race-game:ci --shut-up /app/announcer/race.tr | tee /tmp/announcer.txt
+          test -s /tmp/announcer.txt
+      - name: Smoke-test container
+        run: |
+          docker run -d --name crazy-race-ci -p 18080:8080 crazy-race-game:ci
+          trap 'docker logs crazy-race-ci; docker rm -f crazy-race-ci' EXIT
+          for attempt in $(seq 1 20); do
+            if docker exec crazy-race-ci crazy-race-game --healthcheck; then
+              exit 0
+            fi
+            sleep 1
+          done
+          exit 1
