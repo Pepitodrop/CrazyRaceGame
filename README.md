@@ -53,7 +53,7 @@ samshadwell/TrumpScript@3793b905925b55c0296b066586c7d612c7220ca0
 
 The announcer source is `announcer/race.tr`, and Rust executes it through the original `TRUMP --shut-up` entrypoint. Python is installed **only** because the upstream TrumpScript interpreter is implemented in Python. No game logic, networking, rendering, track generation, or Piet execution is written in Python.
 
-A one-line compatibility patch adds the `type_ignores` field required by modern Python's AST API. The TrumpScript language implementation itself remains upstream code.
+A compatibility-only AST shim maps the interpreter's removed legacy `Module`, `Num`, `Str`, and `NameConstant` constructors to their modern Python equivalents. The TrumpScript grammar and runtime behavior remain upstream code.
 
 ### Piet
 
