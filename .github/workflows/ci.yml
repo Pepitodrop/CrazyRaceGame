@@ -26,27 +26,11 @@ jobs:
           toolchain: 1.82.0
           components: clippy,rustfmt
 
-      - name: Format source canonically
+      - name: Normalize Rust formatting
         run: rustfmt --edition 2021 src/*.rs
 
-      - name: Upload formatted source
-        uses: actions/upload-artifact@v4
-        with:
-          name: formatted-rust-source
-          path: src
-
       - name: Run Clippy
-        shell: bash
-        run: |
-          set -o pipefail
-          cargo clippy --all-targets --locked -- -D warnings 2>&1 | tee /tmp/clippy.log
-
-      - name: Upload Clippy diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: clippy-log
-          path: /tmp/clippy.log
+        run: cargo clippy --all-targets --locked -- -D warnings
 
       - name: Test Rust engine
         run: cargo test --locked
