@@ -702,23 +702,27 @@ fn read_request(stream: &mut TcpStream) -> Result<HttpRequest, String> {
     }
 
     let header_end = header_end.ok_or_else(|| "Malformed HTTP request.".to_string())?;
-    let headers_text = String::from_utf8_lossy(&buffer[..header_end]);
-    let mut lines = headers_text.lines();
-    let request_line = lines.next().ok_or_else(|| "Missing request line.".to_string())?;
-    let mut parts = request_line.split_whitespace();
-    let method = parts.next().unwrap_or("").to_string();
-    let target = parts.next().unwrap_or("/");
-
-    let content_length = lines
-        .find_map(|line| {
-            let (name, value) = line.split_once(':')?;
-            if name.eq_ignore_ascii_case("content-length") {
-                value.trim().parse::<usize>().ok()
-            } else {
-                None
-            }
-        })
-        .unwrap_or(0);
+    let (method, target, content_length) = {
+        let headers_text = String::from_utf8_lossy(&buffer[..header_end]);
+        let mut lines = headers_text.lines();
+        let request_line = lines
+            .next()
+            .ok_or_else(|| "Missing request line.".to_string())?;
+        let mut parts = request_line.split_whitespace();
+        let method = parts.next().unwrap_or("").to_string();
+        let target = parts.next().unwrap_or("/").to_string();
+        let content_length = lines
+            .find_map(|line| {
+                let (name, value) = line.split_once(':')?;
+                if name.eq_ignore_ascii_case("content-length") {
+                    value.trim().parse::<usize>().ok()
+                } else {
+                    None
+                }
+            })
+            .unwrap_or(0);
+        (method, target, content_length)
+    };
 
     while buffer.len() < header_end + content_length {
         let count = stream.read(&mut chunk).map_err(|error| error.to_string())?;
@@ -730,7 +734,7 @@ fn read_request(stream: &mut TcpStream) -> Result<HttpRequest, String> {
 
     let body_end = (header_end + content_length).min(buffer.len());
     let body_text = String::from_utf8_lossy(&buffer[header_end..body_end]);
-    let (path, query_text) = target.split_once('?').unwrap_or((target, ""));
+    let (path, query_text) = target.split_once('?').unwrap_or((target.as_str(), ""));
 
     Ok(HttpRequest {
         method,
