@@ -86,10 +86,9 @@ fn read_request(stream: &mut TcpStream) -> Result<HttpRequest, RouteError> {
             )
         })?;
         let mut lines = headers_text.split("\r\n");
-        let request_line = lines.next().ok_or((
-            "400 Bad Request",
-            "Missing request line.".to_string(),
-        ))?;
+        let request_line = lines
+            .next()
+            .ok_or(("400 Bad Request", "Missing request line.".to_string()))?;
         let mut parts = request_line.split_whitespace();
         let method = parts.next().unwrap_or("");
         let target = parts.next().unwrap_or("");
@@ -119,10 +118,9 @@ fn read_request(stream: &mut TcpStream) -> Result<HttpRequest, RouteError> {
 
         let mut content_length = None;
         for line in lines.filter(|line| !line.is_empty()) {
-            let (name, value) = line.split_once(':').ok_or((
-                "400 Bad Request",
-                "Malformed request header.".to_string(),
-            ))?;
+            let (name, value) = line
+                .split_once(':')
+                .ok_or(("400 Bad Request", "Malformed request header.".to_string()))?;
             if name.eq_ignore_ascii_case("content-length") {
                 let parsed = value.trim().parse::<usize>().map_err(|_| {
                     (
@@ -167,7 +165,8 @@ fn read_request(stream: &mut TcpStream) -> Result<HttpRequest, RouteError> {
 
     while buffer.len() < request_end {
         let remaining = request_end - buffer.len();
-        let count = read_from_stream(stream, &mut chunk[..chunk.len().min(remaining)])?;
+        let read_limit = chunk.len().min(remaining);
+        let count = read_from_stream(stream, &mut chunk[..read_limit])?;
         if count == 0 {
             return Err((
                 "400 Bad Request",
@@ -194,14 +193,10 @@ fn read_request(stream: &mut TcpStream) -> Result<HttpRequest, RouteError> {
 
 fn read_from_stream(stream: &mut TcpStream, buffer: &mut [u8]) -> Result<usize, RouteError> {
     stream.read(buffer).map_err(|error| match error.kind() {
-        std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock => (
-            "408 Request Timeout",
-            "Request timed out.".to_string(),
-        ),
-        _ => (
-            "400 Bad Request",
-            "Could not read the request.".to_string(),
-        ),
+        std::io::ErrorKind::TimedOut | std::io::ErrorKind::WouldBlock => {
+            ("408 Request Timeout", "Request timed out.".to_string())
+        }
+        _ => ("400 Bad Request", "Could not read the request.".to_string()),
     })
 }
 
@@ -309,9 +304,7 @@ fn url_encode(value: &str) -> String {
     value
         .bytes()
         .map(|byte| match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' => {
-                (byte as char).to_string()
-            }
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' => (byte as char).to_string(),
             _ => format!("%{byte:02X}"),
         })
         .collect()
