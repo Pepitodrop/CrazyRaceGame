@@ -1,4 +1,9 @@
-fn resolve_round(room: &mut Room, track: &[TrackSegment], piet_boost: i32, announcements: &[String]) {
+fn resolve_round(
+    room: &mut Room,
+    track: &[TrackSegment],
+    piet_boost: i32,
+    announcements: &[String],
+) {
     let mut summaries = Vec::new();
     let finish_line = track.len() as i32;
 
@@ -6,7 +11,8 @@ fn resolve_round(room: &mut Room, track: &[TrackSegment], piet_boost: i32, annou
         let action = player.submitted.take().unwrap_or(RaceAction::Accelerate);
         let segment_index = player.distance.clamp(0, finish_line.saturating_sub(1)) as usize;
         let segment = &track[segment_index];
-        let (movement, energy_delta, note) = movement_for(action, player.energy, segment, piet_boost);
+        let (movement, energy_delta, note) =
+            movement_for(action, player.energy, segment, piet_boost);
         player.distance += movement;
         player.energy = (player.energy + energy_delta).clamp(0, 10);
         summaries.push(format!(
@@ -28,9 +34,7 @@ fn resolve_round(room: &mut Room, track: &[TrackSegment], piet_boost: i32, annou
         (true, true) => match room.players[0].distance.cmp(&room.players[1].distance) {
             std::cmp::Ordering::Greater => Some(0),
             std::cmp::Ordering::Less => Some(1),
-            std::cmp::Ordering::Equal => {
-                Some(((room.seed ^ room.round as u64) & 1) as usize)
-            }
+            std::cmp::Ordering::Equal => Some(((room.seed ^ room.round as u64) & 1) as usize),
         },
         (false, false) => None,
     };
@@ -40,7 +44,8 @@ fn resolve_round(room: &mut Room, track: &[TrackSegment], piet_boost: i32, annou
     }
     room.last_summary = format!("Round {}: {}.", room.round, summaries.join(" "));
     if !announcements.is_empty() {
-        let index = ((room.seed.wrapping_add(room.round as u64)) % announcements.len() as u64) as usize;
+        let index =
+            ((room.seed.wrapping_add(room.round as u64)) % announcements.len() as u64) as usize;
         room.announcement = announcements[index].clone();
     }
     room.round += 1;
@@ -87,7 +92,8 @@ fn generate_track(seed: u64) -> Result<Vec<TrackSegment>, String> {
 }
 
 fn load_track(path: &str) -> Result<Vec<TrackSegment>, String> {
-    let content = fs::read_to_string(path).map_err(|error| format!("cannot read {path}: {error}"))?;
+    let content =
+        fs::read_to_string(path).map_err(|error| format!("cannot read {path}: {error}"))?;
     let mut track = Vec::new();
     for (line_number, line) in content.lines().enumerate().skip(1) {
         if line.trim().is_empty() {
@@ -124,7 +130,8 @@ enum PietColor {
 }
 
 fn run_piet_oracle(path: &str) -> Result<i32, String> {
-    let source = fs::read_to_string(path).map_err(|error| format!("cannot read {path}: {error}"))?;
+    let source =
+        fs::read_to_string(path).map_err(|error| format!("cannot read {path}: {error}"))?;
     run_piet_source(&source)
 }
 
@@ -230,24 +237,78 @@ fn piet_color(red: i32, green: i32, blue: i32) -> Result<PietColor, String> {
     let color = match (red, green, blue) {
         (255, 255, 255) => PietColor::White,
         (0, 0, 0) => PietColor::Black,
-        (255, 192, 192) => PietColor::Chromatic { hue: 0, lightness: 0 },
-        (255, 0, 0) => PietColor::Chromatic { hue: 0, lightness: 1 },
-        (192, 0, 0) => PietColor::Chromatic { hue: 0, lightness: 2 },
-        (255, 255, 192) => PietColor::Chromatic { hue: 1, lightness: 0 },
-        (255, 255, 0) => PietColor::Chromatic { hue: 1, lightness: 1 },
-        (192, 192, 0) => PietColor::Chromatic { hue: 1, lightness: 2 },
-        (192, 255, 192) => PietColor::Chromatic { hue: 2, lightness: 0 },
-        (0, 255, 0) => PietColor::Chromatic { hue: 2, lightness: 1 },
-        (0, 192, 0) => PietColor::Chromatic { hue: 2, lightness: 2 },
-        (192, 255, 255) => PietColor::Chromatic { hue: 3, lightness: 0 },
-        (0, 255, 255) => PietColor::Chromatic { hue: 3, lightness: 1 },
-        (0, 192, 192) => PietColor::Chromatic { hue: 3, lightness: 2 },
-        (192, 192, 255) => PietColor::Chromatic { hue: 4, lightness: 0 },
-        (0, 0, 255) => PietColor::Chromatic { hue: 4, lightness: 1 },
-        (0, 0, 192) => PietColor::Chromatic { hue: 4, lightness: 2 },
-        (255, 192, 255) => PietColor::Chromatic { hue: 5, lightness: 0 },
-        (255, 0, 255) => PietColor::Chromatic { hue: 5, lightness: 1 },
-        (192, 0, 192) => PietColor::Chromatic { hue: 5, lightness: 2 },
+        (255, 192, 192) => PietColor::Chromatic {
+            hue: 0,
+            lightness: 0,
+        },
+        (255, 0, 0) => PietColor::Chromatic {
+            hue: 0,
+            lightness: 1,
+        },
+        (192, 0, 0) => PietColor::Chromatic {
+            hue: 0,
+            lightness: 2,
+        },
+        (255, 255, 192) => PietColor::Chromatic {
+            hue: 1,
+            lightness: 0,
+        },
+        (255, 255, 0) => PietColor::Chromatic {
+            hue: 1,
+            lightness: 1,
+        },
+        (192, 192, 0) => PietColor::Chromatic {
+            hue: 1,
+            lightness: 2,
+        },
+        (192, 255, 192) => PietColor::Chromatic {
+            hue: 2,
+            lightness: 0,
+        },
+        (0, 255, 0) => PietColor::Chromatic {
+            hue: 2,
+            lightness: 1,
+        },
+        (0, 192, 0) => PietColor::Chromatic {
+            hue: 2,
+            lightness: 2,
+        },
+        (192, 255, 255) => PietColor::Chromatic {
+            hue: 3,
+            lightness: 0,
+        },
+        (0, 255, 255) => PietColor::Chromatic {
+            hue: 3,
+            lightness: 1,
+        },
+        (0, 192, 192) => PietColor::Chromatic {
+            hue: 3,
+            lightness: 2,
+        },
+        (192, 192, 255) => PietColor::Chromatic {
+            hue: 4,
+            lightness: 0,
+        },
+        (0, 0, 255) => PietColor::Chromatic {
+            hue: 4,
+            lightness: 1,
+        },
+        (0, 0, 192) => PietColor::Chromatic {
+            hue: 4,
+            lightness: 2,
+        },
+        (255, 192, 255) => PietColor::Chromatic {
+            hue: 5,
+            lightness: 0,
+        },
+        (255, 0, 255) => PietColor::Chromatic {
+            hue: 5,
+            lightness: 1,
+        },
+        (192, 0, 192) => PietColor::Chromatic {
+            hue: 5,
+            lightness: 2,
+        },
         _ => return Err(format!("unsupported Piet color ({red}, {green}, {blue})")),
     };
     Ok(color)

@@ -86,10 +86,7 @@ mod tests {
 
     #[test]
     fn boost_needs_energy() {
-        assert_eq!(
-            movement_for(RaceAction::Boost, 2, &segment("jump"), 3).0,
-            1
-        );
+        assert_eq!(movement_for(RaceAction::Boost, 2, &segment("jump"), 3).0, 1);
         assert!(movement_for(RaceAction::Boost, 3, &segment("jump"), 3).0 > 1);
     }
 
