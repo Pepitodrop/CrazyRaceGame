@@ -23,9 +23,12 @@ RUN apt-get update \
        src/trumpscript/parser.py
 
 FROM r-base:4.4.2
+ARG APP_VERSION=1.0.0
 LABEL org.opencontainers.image.title="Crazy Race Game" \
       org.opencontainers.image.description="Server-rendered Rust, R, TrumpScript and Piet racing game" \
+      org.opencontainers.image.version="${APP_VERSION}" \
       org.opencontainers.image.source="https://github.com/Pepitodrop/CrazyRaceGame" \
+      org.opencontainers.image.documentation="https://github.com/Pepitodrop/CrazyRaceGame/blob/main/docs/PRODUCTION.md" \
       org.opencontainers.image.licenses="MIT"
 WORKDIR /app
 RUN apt-get update \

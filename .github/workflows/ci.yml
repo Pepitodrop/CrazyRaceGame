@@ -3,7 +3,9 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ["v*.*.*"]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -19,6 +21,55 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Verify public release hygiene
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          required_files=(
+            LICENSE
+            README.md
+            CHANGELOG.md
+            CONTRIBUTING.md
+            CODE_OF_CONDUCT.md
+            SECURITY.md
+            THIRD_PARTY_NOTICES.md
+            docs/PRODUCTION.md
+            docs/RELEASING.md
+          )
+          for file in "${required_files[@]}"; do
+            test -s "$file" || { echo "Missing required public-release file: $file"; exit 1; }
+          done
+
+          version="$(awk -F'"' '/^version = "/ { print $2; exit }' Cargo.toml)"
+          test -n "$version"
+          grep -Fq "version = \"$version\"" Cargo.lock
+          grep -Fq "## [$version]" CHANGELOG.md
+
+          if [[ "${GITHUB_REF_TYPE:-}" == "tag" ]]; then
+            test "${GITHUB_REF_NAME}" = "v${version}" || {
+              echo "Tag ${GITHUB_REF_NAME} does not match Cargo version ${version}."
+              exit 1
+            }
+          fi
+
+          tracked_sensitive="$({
+            git ls-files | grep -E '(^|/)\.env($|\.)|\.(pem|key|p12|pfx)$' || true
+          } | grep -vE '(^|/)\.env\.example$' || true)"
+          if [[ -n "$tracked_sensitive" ]]; then
+            echo "Sensitive local files are tracked:"
+            echo "$tracked_sensitive"
+            exit 1
+          fi
+
+          high_confidence_secret_pattern='-----BEGIN (RSA |EC |DSA |OPENSSH )?PRIVATE KEY-----|AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9_]{30,}|xox[baprs]-[A-Za-z0-9-]{10,}'
+          if git grep -nE -e "$high_confidence_secret_pattern" -- .; then
+            echo "A high-confidence secret pattern was found in the tracked tree."
+            exit 1
+          fi
+
+          ruby -e 'require "yaml"; Dir[".github/**/*.{yml,yaml}"].sort.each { |file| YAML.load_file(file); puts "valid yaml: #{file}" }'
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30
@@ -44,8 +95,13 @@ jobs:
       - name: Build Docker image
         run: docker build -t crazy-race-game:ci .
 
-      - name: Verify non-root runtime
-        run: test "$(docker image inspect crazy-race-game:ci --format '{{.Config.User}}')" = "10001:10001"
+      - name: Verify image metadata and non-root runtime
+        shell: bash
+        run: |
+          version="$(awk -F'"' '/^version = "/ { print $2; exit }' Cargo.toml)"
+          test "$(docker image inspect crazy-race-game:ci --format '{{.Config.User}}')" = "10001:10001"
+          test "$(docker image inspect crazy-race-game:ci --format '{{index .Config.Labels "org.opencontainers.image.version"}}')" = "$version"
+          test "$(docker image inspect crazy-race-game:ci --format '{{index .Config.Labels "org.opencontainers.image.licenses"}}')" = "MIT"
 
       - name: Verify original TrumpScript interpreter
         shell: bash
