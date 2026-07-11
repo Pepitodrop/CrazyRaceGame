@@ -2,7 +2,7 @@
 
 A Dockerized, browser-based **1v1 turn-based race** built around four deliberately unusual languages:
 
-- **Rust**: HTTP server, room management, game rules, server-rendered UI, and the Piet interpreter.
+- **Rust**: HTTP server, room management, game rules, responsive server-rendered UI, and the Piet interpreter.
 - **R**: deterministic procedural track generation at container startup.
 - **TrumpScript**: the race announcer, executed by the original archived interpreter.
 - **Piet**: an image-based boost oracle stored as an ASCII PPM painting.
@@ -15,7 +15,7 @@ The browser UI uses only server-rendered HTML and CSS. There is no JavaScript ap
 docker compose up --build
 ```
 
-Open `http://localhost:8080` in two browser windows. One player creates a room and shares the six-character code; the other joins it.
+Open `http://localhost:8080` on a computer, phone, or tablet.
 
 Change the deterministic R track seed with:
 
@@ -23,21 +23,47 @@ Change the deterministic R track seed with:
 TRACK_SEED=2026 docker compose up --build
 ```
 
+## Playing modes
+
+### Online or LAN room
+
+One player creates a room and shares the six-character code. The second player joins from another browser window or another device that can reach the server.
+
+For another device on the same Wi-Fi network, open the Docker host's local address, for example `http://192.168.1.20:8080`.
+
+### Local pass-and-play
+
+Choose **Local 1v1**, enter two racer names, and play on one computer, phone, or tablet. Player 1 chooses a move, then passes the device to Player 2. The first move is stored without being displayed. After Player 2 chooses, Rust resolves both moves and shows the round result.
+
+## Mobile support
+
+The same server-rendered pages adapt to narrow screens:
+
+- cards and racer panels stack vertically;
+- action buttons become large full-width touch targets;
+- the circuit can be scrolled horizontally;
+- text and spacing scale down on small phones;
+- safe-area padding supports modern mobile browsers.
+
+No mobile app installation is required.
+
 ## How a race works
 
-Each round, both racers secretly lock in one move:
+Each round, both racers choose one move:
 
 - **Accelerate**: reliable speed, costs one energy.
 - **Drift**: strongest on curves and restores energy according to the R-generated segment.
 - **Piet Boost**: consumes three energy and adds the number emitted by the Piet painting.
 
-The round resolves only after both players submit. The first racer across the final segment wins. If both cross in the same round, overshoot distance decides; an exact tie uses a deterministic room tie-breaker.
+In online mode, the round resolves after both players submit. In local mode, the same process happens sequentially on one device. The first racer across the final segment wins. If both cross in the same round, overshoot distance decides; an exact tie uses a deterministic room tie-breaker.
 
 ## Language architecture
 
 ### Rust
 
-`src/main.rs` contains a dependency-free HTTP server using the Rust standard library. It owns all mutable game state in memory, renders every page on the server, validates room tokens, resolves simultaneous turns, and interprets the Piet oracle.
+The dependency-free Rust application uses only the standard library. It owns all mutable game state in memory, renders every page on the server, validates room and local-game tokens, resolves turns, and interprets the Piet oracle.
+
+The source is split into `src/part1.rs` through `src/part5.rs` and assembled by `src/main.rs` with `include!` so the resulting program remains one Rust binary.
 
 ### R
 
@@ -64,19 +90,6 @@ A compatibility-only AST shim maps the interpreter's removed legacy `Module`, `N
 
 Rust reads the PPM, interprets those Piet transitions, and uses the emitted `3` as the boost modifier.
 
-## Project layout
-
-```text
-.
-├── announcer/race.tr
-├── data/default_track.tsv
-├── piet/boost_oracle.ppm
-├── scripts/generate_track.R
-├── src/main.rs
-├── Dockerfile
-└── docker-compose.yml
-```
-
 ## Validation
 
 ```bash
@@ -90,7 +103,7 @@ The GitHub Actions workflow runs the Rust tests, release build, Docker build, or
 
 ## Operational limits
 
-This is a compact game prototype. Rooms are stored in memory and disappear when the container restarts. Player tokens appear in the browser URL, so deploy it behind HTTPS before exposing it beyond a trusted network.
+This is a compact game prototype. Rooms and local games are stored in memory and disappear when the container restarts. Player tokens appear in the browser URL, so deploy it behind HTTPS before exposing it beyond a trusted network.
 
 ## License and attribution
 
