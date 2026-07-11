@@ -95,8 +95,13 @@ jobs:
       - name: Build Docker image
         run: docker build -t crazy-race-game:ci .
 
-      - name: Verify non-root runtime
-        run: test "$(docker image inspect crazy-race-game:ci --format '{{.Config.User}}')" = "10001:10001"
+      - name: Verify image metadata and non-root runtime
+        shell: bash
+        run: |
+          version="$(awk -F'"' '/^version = "/ { print $2; exit }' Cargo.toml)"
+          test "$(docker image inspect crazy-race-game:ci --format '{{.Config.User}}')" = "10001:10001"
+          test "$(docker image inspect crazy-race-game:ci --format '{{index .Config.Labels "org.opencontainers.image.version"}}')" = "$version"
+          test "$(docker image inspect crazy-race-game:ci --format '{{index .Config.Labels "org.opencontainers.image.licenses"}}')" = "MIT"
 
       - name: Verify original TrumpScript interpreter
         shell: bash
