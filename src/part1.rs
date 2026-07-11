@@ -4,7 +4,10 @@ use std::fs;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::process::Command;
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc, Mutex,
+};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -15,6 +18,9 @@ const FALLBACK_TRACK: &str = "data/default_track.tsv";
 const TRUMPSCRIPT_BIN: &str = "/opt/trumpscript/bin/TRUMP";
 const TRUMPSCRIPT_PROGRAM: &str = "announcer/race.tr";
 const PIET_PROGRAM: &str = "piet/boost_oracle.ppm";
+const DEFAULT_MAX_CONNECTIONS: usize = 128;
+const DEFAULT_MAX_ROOMS: usize = 1_000;
+const DEFAULT_ROOM_TTL_SECONDS: u64 = 7_200;
 
 #[derive(Clone, Debug)]
 struct TrackSegment {
@@ -77,6 +83,7 @@ struct Room {
     last_summary: String,
     announcement: String,
     seed: u64,
+    last_activity: u64,
 }
 
 #[derive(Debug)]
@@ -86,6 +93,8 @@ struct AppState {
     piet_boost: i32,
     announcements: Vec<String>,
     entropy: u64,
+    max_rooms: usize,
+    room_ttl_seconds: u64,
 }
 
 #[derive(Debug)]
@@ -99,21 +108,44 @@ struct HttpRequest {
 type RouteResponse = (&'static str, &'static str, String, Vec<(String, String)>);
 type RouteError = (&'static str, String);
 
+struct ConnectionGuard {
+    active: Arc<AtomicUsize>,
+}
+
+impl ConnectionGuard {
+    fn new(active: Arc<AtomicUsize>) -> Self {
+        Self { active }
+    }
+}
+
+impl Drop for ConnectionGuard {
+    fn drop(&mut self) {
+        self.active.fetch_sub(1, Ordering::AcqRel);
+    }
+}
+
 fn main() {
     if env::args().any(|arg| arg == "--healthcheck") {
-        let address = env::var("BIND_ADDRESS").unwrap_or_else(|_| DEFAULT_BIND.to_string());
-        let port = address.rsplit(':').next().unwrap_or("8080");
-        std::process::exit(if TcpStream::connect(format!("127.0.0.1:{port}")).is_ok() {
-            0
-        } else {
-            1
-        });
+        std::process::exit(if run_healthcheck() { 0 } else { 1 });
     }
 
     let seed = env::var("TRACK_SEED")
         .ok()
         .and_then(|value| value.parse::<u64>().ok())
         .unwrap_or(42);
+    let max_connections = env_usize(
+        "MAX_CONNECTIONS",
+        DEFAULT_MAX_CONNECTIONS,
+        1,
+        4_096,
+    );
+    let max_rooms = env_usize("MAX_ROOMS", DEFAULT_MAX_ROOMS, 1, 100_000);
+    let room_ttl_seconds = env_u64(
+        "ROOM_TTL_SECONDS",
+        DEFAULT_ROOM_TTL_SECONDS,
+        60,
+        604_800,
+    );
 
     let track = generate_track(seed).unwrap_or_else(|error| {
         eprintln!("R track generation failed ({error}); loading fallback track.");
@@ -141,6 +173,9 @@ fn main() {
         piet_boost,
         announcements.len()
     );
+    println!(
+        "Limits: {max_connections} connections, {max_rooms} rooms, {room_ttl_seconds}s room inactivity TTL."
+    );
 
     let entropy = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -154,18 +189,37 @@ fn main() {
         piet_boost,
         announcements,
         entropy,
+        max_rooms,
+        room_ttl_seconds,
     }));
 
     let bind_address = env::var("BIND_ADDRESS").unwrap_or_else(|_| DEFAULT_BIND.to_string());
     let listener = TcpListener::bind(&bind_address)
         .unwrap_or_else(|error| panic!("cannot bind to {bind_address}: {error}"));
+    let active_connections = Arc::new(AtomicUsize::new(0));
     println!("Crazy Race is listening on http://{bind_address}");
 
     for incoming in listener.incoming() {
         match incoming {
-            Ok(stream) => {
+            Ok(mut stream) => {
+                if active_connections.fetch_add(1, Ordering::AcqRel) >= max_connections {
+                    active_connections.fetch_sub(1, Ordering::AcqRel);
+                    let _ = send_response(
+                        &mut stream,
+                        "503 Service Unavailable",
+                        "text/plain; charset=utf-8",
+                        "Server is busy. Try again shortly.",
+                        &[("Retry-After".to_string(), "1".to_string())],
+                    );
+                    continue;
+                }
+
                 let shared = Arc::clone(&state);
-                thread::spawn(move || handle_connection(stream, shared));
+                let active = Arc::clone(&active_connections);
+                thread::spawn(move || {
+                    let _guard = ConnectionGuard::new(active);
+                    handle_connection(stream, shared);
+                });
             }
             Err(error) => eprintln!("connection error: {error}"),
         }
@@ -175,10 +229,10 @@ fn main() {
 fn handle_connection(mut stream: TcpStream, state: Arc<Mutex<AppState>>) {
     let request = match read_request(&mut stream) {
         Ok(request) => request,
-        Err(error) => {
+        Err((status, error)) => {
             let _ = send_response(
                 &mut stream,
-                "400 Bad Request",
+                status,
                 "text/plain; charset=utf-8",
                 &error,
                 &[],
@@ -200,7 +254,15 @@ fn handle_connection(mut stream: TcpStream, state: Arc<Mutex<AppState>>) {
     let _ = send_response(&mut stream, status, content_type, &body, &headers);
 }
 
-fn route_request(request: &HttpRequest, state: &Arc<Mutex<AppState>>) -> Result<RouteResponse, RouteError> {
+fn route_request(
+    request: &HttpRequest,
+    state: &Arc<Mutex<AppState>>,
+) -> Result<RouteResponse, RouteError> {
+    if request.path != "/health" {
+        let mut app = state.lock().map_err(|_| internal_error())?;
+        prune_expired_rooms(&mut app);
+    }
+
     match (request.method.as_str(), request.path.as_str()) {
         ("GET", "/") => Ok((
             "200 OK",
@@ -226,13 +288,18 @@ fn route_request(request: &HttpRequest, state: &Arc<Mutex<AppState>>) -> Result<
     }
 }
 
-fn create_room(request: &HttpRequest, state: &Arc<Mutex<AppState>>) -> Result<RouteResponse, RouteError> {
+fn create_room(
+    request: &HttpRequest,
+    state: &Arc<Mutex<AppState>>,
+) -> Result<RouteResponse, RouteError> {
     let name = clean_name(request.body.get("name"))?;
     let mut app = state.lock().map_err(|_| internal_error())?;
+    ensure_room_capacity(&mut app)?;
     let code = unique_room_code(&mut app);
     let token = next_token(&mut app);
     let seed = next_random(&mut app);
     let announcement = first_announcement(&app);
+    let now = now_epoch();
 
     app.rooms.insert(
         code.clone(),
@@ -247,15 +314,19 @@ fn create_room(request: &HttpRequest, state: &Arc<Mutex<AppState>>) -> Result<Ro
             last_summary: "Room created. Share the room code with your rival.".to_string(),
             announcement,
             seed,
+            last_activity: now,
         },
     );
 
     Ok(redirect_to_game(&code, &token))
 }
 
-fn join_room(request: &HttpRequest, state: &Arc<Mutex<AppState>>) -> Result<RouteResponse, RouteError> {
+fn join_room(
+    request: &HttpRequest,
+    state: &Arc<Mutex<AppState>>,
+) -> Result<RouteResponse, RouteError> {
     let name = clean_name(request.body.get("name"))?;
-    let code = required_body(request, "room")?.trim().to_ascii_uppercase();
+    let code = clean_room_code(&required_body(request, "room")?)?;
     let mut app = state.lock().map_err(|_| internal_error())?;
     let token = next_token(&mut app);
     let room = app
@@ -267,15 +338,22 @@ fn join_room(request: &HttpRequest, state: &Arc<Mutex<AppState>>) -> Result<Rout
         return Err(("409 Conflict", "That room is a local game.".to_string()));
     }
     if room.players.len() >= 2 {
-        return Err(("409 Conflict", "That room already has two racers.".to_string()));
+        return Err((
+            "409 Conflict",
+            "That room already has two racers.".to_string(),
+        ));
     }
 
     room.players.push(new_player(name, token.clone()));
+    room.last_activity = now_epoch();
     room.last_summary = "Both racers are connected. Choose your first move.".to_string();
     Ok(redirect_to_game(&code, &token))
 }
 
-fn create_local_room(request: &HttpRequest, state: &Arc<Mutex<AppState>>) -> Result<RouteResponse, RouteError> {
+fn create_local_room(
+    request: &HttpRequest,
+    state: &Arc<Mutex<AppState>>,
+) -> Result<RouteResponse, RouteError> {
     let player_one = clean_name(request.body.get("player_one"))?;
     let player_two = clean_name(request.body.get("player_two"))?;
     if player_one.eq_ignore_ascii_case(&player_two) {
@@ -286,26 +364,33 @@ fn create_local_room(request: &HttpRequest, state: &Arc<Mutex<AppState>>) -> Res
     }
 
     let mut app = state.lock().map_err(|_| internal_error())?;
+    ensure_room_capacity(&mut app)?;
     let code = unique_room_code(&mut app);
     let local_token = next_token(&mut app);
     let token_one = next_token(&mut app);
     let token_two = next_token(&mut app);
     let seed = next_random(&mut app);
     let announcement = first_announcement(&app);
+    let now = now_epoch();
 
     app.rooms.insert(
         code.clone(),
         Room {
             code: code.clone(),
             mode: GameMode::Local,
-            players: vec![new_player(player_one, token_one), new_player(player_two, token_two)],
+            players: vec![
+                new_player(player_one, token_one),
+                new_player(player_two, token_two),
+            ],
             local_token: Some(local_token.clone()),
             local_turn: 0,
             round: 1,
             winner: None,
-            last_summary: "Local race ready. Player 1 chooses first, then pass the device.".to_string(),
+            last_summary: "Local race ready. Player 1 chooses first, then pass the device."
+                .to_string(),
             announcement,
             seed,
+            last_activity: now,
         },
     );
 
@@ -329,49 +414,59 @@ fn first_announcement(app: &AppState) -> String {
         .unwrap_or_else(|| "Race ready.".to_string())
 }
 
-fn show_game(request: &HttpRequest, state: &Arc<Mutex<AppState>>) -> Result<RouteResponse, RouteError> {
-    let code = required_query(request, "room")?.to_ascii_uppercase();
+fn show_game(
+    request: &HttpRequest,
+    state: &Arc<Mutex<AppState>>,
+) -> Result<RouteResponse, RouteError> {
+    let code = clean_room_code(&required_query(request, "room")?)?;
     let token = required_query(request, "token")?;
-    let app = state.lock().map_err(|_| internal_error())?;
+    let mut app = state.lock().map_err(|_| internal_error())?;
+    let track = app.track.clone();
+    let piet_boost = app.piet_boost;
     let room = app
         .rooms
-        .get(&code)
+        .get_mut(&code)
         .ok_or(("404 Not Found", "Room not found.".to_string()))?;
     if room.mode != GameMode::Online {
-        return Err(("409 Conflict", "Open this race through local-play mode.".to_string()));
+        return Err((
+            "409 Conflict",
+            "Open this race through local-play mode.".to_string(),
+        ));
     }
     let player_index = room
         .players
         .iter()
         .position(|player| player.token == token)
         .ok_or(("403 Forbidden", "Invalid racer token.".to_string()))?;
-    Ok((
-        "200 OK",
-        "text/html; charset=utf-8",
-        render_online_game_page(room, player_index, &app.track, app.piet_boost),
-        Vec::new(),
-    ))
+    room.last_activity = now_epoch();
+    let body = render_online_game_page(room, player_index, &track, piet_boost);
+    Ok(("200 OK", "text/html; charset=utf-8", body, Vec::new()))
 }
 
-fn show_local_game(request: &HttpRequest, state: &Arc<Mutex<AppState>>) -> Result<RouteResponse, RouteError> {
-    let code = required_query(request, "room")?.to_ascii_uppercase();
+fn show_local_game(
+    request: &HttpRequest,
+    state: &Arc<Mutex<AppState>>,
+) -> Result<RouteResponse, RouteError> {
+    let code = clean_room_code(&required_query(request, "room")?)?;
     let token = required_query(request, "token")?;
-    let app = state.lock().map_err(|_| internal_error())?;
+    let mut app = state.lock().map_err(|_| internal_error())?;
+    let track = app.track.clone();
+    let piet_boost = app.piet_boost;
     let room = app
         .rooms
-        .get(&code)
+        .get_mut(&code)
         .ok_or(("404 Not Found", "Local game not found.".to_string()))?;
     ensure_local_access(room, &token)?;
-    Ok((
-        "200 OK",
-        "text/html; charset=utf-8",
-        render_local_game_page(room, &token, &app.track, app.piet_boost),
-        Vec::new(),
-    ))
+    room.last_activity = now_epoch();
+    let body = render_local_game_page(room, &token, &track, piet_boost);
+    Ok(("200 OK", "text/html; charset=utf-8", body, Vec::new()))
 }
 
-fn submit_action(request: &HttpRequest, state: &Arc<Mutex<AppState>>) -> Result<RouteResponse, RouteError> {
-    let code = required_body(request, "room")?.to_ascii_uppercase();
+fn submit_action(
+    request: &HttpRequest,
+    state: &Arc<Mutex<AppState>>,
+) -> Result<RouteResponse, RouteError> {
+    let code = clean_room_code(&required_body(request, "room")?)?;
     let token = required_body(request, "token")?;
     let action = parse_action(request)?;
 
@@ -385,13 +480,22 @@ fn submit_action(request: &HttpRequest, state: &Arc<Mutex<AppState>>) -> Result<
         .ok_or(("404 Not Found", "Room not found.".to_string()))?;
 
     if room.mode != GameMode::Online {
-        return Err(("409 Conflict", "Use the local-play controls for this race.".to_string()));
+        return Err((
+            "409 Conflict",
+            "Use the local-play controls for this race.".to_string(),
+        ));
     }
     if room.players.len() != 2 {
-        return Err(("409 Conflict", "Wait for a second racer.".to_string()));
+        return Err((
+            "409 Conflict",
+            "Wait for a second racer.".to_string(),
+        ));
     }
     if room.winner.is_some() {
-        return Err(("409 Conflict", "The race is already finished.".to_string()));
+        return Err((
+            "409 Conflict",
+            "The race is already finished.".to_string(),
+        ));
     }
 
     let player_index = room
@@ -400,23 +504,34 @@ fn submit_action(request: &HttpRequest, state: &Arc<Mutex<AppState>>) -> Result<
         .position(|player| player.token == token)
         .ok_or(("403 Forbidden", "Invalid racer token.".to_string()))?;
     if room.players[player_index].submitted.is_some() {
-        return Err(("409 Conflict", "Your move is already locked in.".to_string()));
+        return Err((
+            "409 Conflict",
+            "Your move is already locked in.".to_string(),
+        ));
     }
 
     room.players[player_index].submitted = Some(action);
-    room.last_summary = format!(
-        "{} locked in {}. Waiting for the rival.",
-        room.players[player_index].name,
-        action.label()
-    );
-    if room.players.iter().all(|player| player.submitted.is_some()) {
+    room.last_activity = now_epoch();
+    room.last_summary = move_locked_summary(&room.players[player_index].name);
+    if room
+        .players
+        .iter()
+        .all(|player| player.submitted.is_some())
+    {
         resolve_round(room, &track, piet_boost, &announcements);
     }
     Ok(redirect_to_game(&code, &token))
 }
 
-fn submit_local_action(request: &HttpRequest, state: &Arc<Mutex<AppState>>) -> Result<RouteResponse, RouteError> {
-    let code = required_body(request, "room")?.to_ascii_uppercase();
+fn move_locked_summary(player_name: &str) -> String {
+    format!("{player_name} locked in a move. Waiting for the rival.")
+}
+
+fn submit_local_action(
+    request: &HttpRequest,
+    state: &Arc<Mutex<AppState>>,
+) -> Result<RouteResponse, RouteError> {
+    let code = clean_room_code(&required_body(request, "room")?)?;
     let token = required_body(request, "token")?;
     let action = parse_action(request)?;
 
@@ -430,14 +545,21 @@ fn submit_local_action(request: &HttpRequest, state: &Arc<Mutex<AppState>>) -> R
         .ok_or(("404 Not Found", "Local game not found.".to_string()))?;
     ensure_local_access(room, &token)?;
     if room.winner.is_some() {
-        return Err(("409 Conflict", "The race is already finished.".to_string()));
+        return Err((
+            "409 Conflict",
+            "The race is already finished.".to_string(),
+        ));
     }
 
     let turn = room.local_turn.min(1);
     if room.players[turn].submitted.is_some() {
-        return Err(("409 Conflict", "That move is already locked in.".to_string()));
+        return Err((
+            "409 Conflict",
+            "That move is already locked in.".to_string(),
+        ));
     }
     room.players[turn].submitted = Some(action);
+    room.last_activity = now_epoch();
 
     if turn == 0 {
         room.local_turn = 1;
@@ -458,8 +580,11 @@ fn parse_action(request: &HttpRequest) -> Result<RaceAction, RouteError> {
         .ok_or(("400 Bad Request", "Unknown race action.".to_string()))
 }
 
-fn rematch(request: &HttpRequest, state: &Arc<Mutex<AppState>>) -> Result<RouteResponse, RouteError> {
-    let code = required_body(request, "room")?.to_ascii_uppercase();
+fn rematch(
+    request: &HttpRequest,
+    state: &Arc<Mutex<AppState>>,
+) -> Result<RouteResponse, RouteError> {
+    let code = clean_room_code(&required_body(request, "room")?)?;
     let token = required_body(request, "token")?;
     let mut app = state.lock().map_err(|_| internal_error())?;
     let room = app
@@ -483,6 +608,7 @@ fn rematch(request: &HttpRequest, state: &Arc<Mutex<AppState>>) -> Result<RouteR
     room.local_turn = 0;
     room.round = 1;
     room.winner = None;
+    room.last_activity = now_epoch();
     room.last_summary = "Rematch started. Choose your move.".to_string();
 
     Ok(match room.mode {
@@ -493,10 +619,16 @@ fn rematch(request: &HttpRequest, state: &Arc<Mutex<AppState>>) -> Result<RouteR
 
 fn ensure_local_access(room: &Room, token: &str) -> Result<(), RouteError> {
     if room.mode != GameMode::Local {
-        return Err(("409 Conflict", "That room is an online race.".to_string()));
+        return Err((
+            "409 Conflict",
+            "That room is an online race.".to_string(),
+        ));
     }
     if room.local_token.as_deref() != Some(token) {
-        return Err(("403 Forbidden", "Invalid local-game token.".to_string()));
+        return Err((
+            "403 Forbidden",
+            "Invalid local-game token.".to_string(),
+        ));
     }
     Ok(())
 }
