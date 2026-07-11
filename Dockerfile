@@ -13,7 +13,12 @@ RUN apt-get update \
     && cd /opt/trumpscript \
     && git checkout "$TRUMPSCRIPT_COMMIT" \
     && rm -rf .git \
-    && sed -i 's/return Module(body=body_list)/return Module(body=body_list, type_ignores=[])/' src/trumpscript/parser.py
+    && sed -i \
+       -e 's/return Module(body=body_list)/return Module(body=body_list, type_ignores=[])/' \
+       -e 's/Num(/Constant(value=/g' \
+       -e 's/Str(/Constant(value=/g' \
+       -e 's/NameConstant(/Constant(/g' \
+       src/trumpscript/parser.py
 
 FROM r-base:4.4.2
 WORKDIR /app
