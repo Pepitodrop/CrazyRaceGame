@@ -2,3 +2,17 @@ target
 .git
 .github
 *.md
+
+# Never send local configuration or credentials to the build context.
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Local editor and operating-system files.
+.DS_Store
+.idea
+.vscode
+*.log
