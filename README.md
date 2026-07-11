@@ -1,6 +1,10 @@
 # Crazy Race Game
 
-Crazy Race v1.0 is a Dockerized, browser-based **1v1 turn-based racing game** built around four deliberately unusual languages:
+[![CI](https://github.com/Pepitodrop/CrazyRaceGame/actions/workflows/ci.yml/badge.svg)](https://github.com/Pepitodrop/CrazyRaceGame/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/badge/release-v1.0.0-blue.svg)](CHANGELOG.md)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
+Crazy Race 1.0.0 is a Dockerized, browser-based **1v1 turn-based racing game** built around four deliberately unusual languages:
 
 - **Rust**: dependency-free HTTP server, room management, game rules, responsive server-rendered UI, security controls, and the Piet interpreter.
 - **R**: deterministic procedural track generation at container startup.
@@ -9,9 +13,13 @@ Crazy Race v1.0 is a Dockerized, browser-based **1v1 turn-based racing game** bu
 
 The browser UI uses only server-rendered HTML and CSS. There is no JavaScript application and no separate frontend service.
 
-## Run locally or on a LAN
+## Quick start
+
+You need Docker Engine or Docker Desktop with Docker Compose support.
 
 ```bash
+git clone https://github.com/Pepitodrop/CrazyRaceGame.git
+cd CrazyRaceGame
 docker compose up --build
 ```
 
@@ -32,18 +40,18 @@ cp .env.example .env
 docker compose -f compose.production.yml up -d --build
 ```
 
-Use `deploy/Caddyfile.example` as a TLS reverse-proxy starting point. Full deployment, update, scaling and operational instructions are in [`docs/PRODUCTION.md`](docs/PRODUCTION.md).
+Use `deploy/Caddyfile.example` as a TLS reverse-proxy starting point. Full deployment, update, scaling, and operational instructions are in [`docs/PRODUCTION.md`](docs/PRODUCTION.md).
 
 Production safeguards include:
 
 - a non-root UID/GID;
 - a read-only root filesystem and small writable `/tmp` tmpfs;
 - all Linux capabilities removed and `no-new-privileges` enabled;
-- CPU, memory, process and log limits;
+- CPU, memory, process, and log limits;
 - cryptographically random 256-bit bearer tokens on Linux;
-- request-header, request-body, URI, connection and room limits;
+- request-header, request-body, URI, connection, and room limits;
 - automatic expiry of inactive rooms;
-- CSP, cache-control, referrer, framing, permissions and cross-origin response headers;
+- CSP, cache-control, referrer, framing, permissions, and cross-origin response headers;
 - an HTTP-aware readiness check;
 - end-to-end CI tests against the hardened container configuration.
 
@@ -118,18 +126,36 @@ Rust reads the PPM, interprets those Piet transitions, and uses the emitted `3` 
 rustfmt --edition 2021 src/*.rs
 cargo clippy --all-targets --locked -- -D warnings
 cargo test --locked
+cargo build --release --locked
+docker compose -f compose.production.yml config --quiet
 docker build -t crazy-race-game .
+```
+
+Start the application before running the browser-level smoke test:
+
+```bash
 bash scripts/smoke-test.sh http://127.0.0.1:8080
 ```
 
-GitHub Actions additionally validates the production Compose file, verifies the non-root image user, executes the original TrumpScript interpreter, and runs the complete online and local gameplay smoke test inside a read-only, capability-free container.
+GitHub Actions additionally verifies the non-root image user, executes the original pinned TrumpScript interpreter, and runs the complete online and local gameplay smoke test inside a read-only, capability-free, resource-limited container.
 
-## Operational boundary
+## Support boundary
 
-Crazy Race is production-ready as a **single-instance service**. Active rooms are stored in memory and disappear when the process restarts. Do not deploy multiple replicas without first moving room state to a shared transactional store.
+Crazy Race 1.0.0 is suitable for public release and production deployment as a **single-instance hobby, demo, or small-community service** behind HTTPS. It is not an internet-scale multi-tenant platform.
 
-Player tokens are bearer credentials contained in game URLs. Public deployments must use HTTPS and the application sends `Referrer-Policy: no-referrer` plus `Cache-Control: no-store` to reduce leakage and caching risk.
+Active rooms are stored in memory and disappear when the process restarts. Do not deploy multiple replicas without first moving room state to a shared transactional store.
 
-## Security, license and attribution
+Player tokens are bearer credentials contained in game URLs. Public deployments must use HTTPS, and the application sends `Referrer-Policy: no-referrer` plus `Cache-Control: no-store` to reduce leakage and caching risk.
 
-See [`SECURITY.md`](SECURITY.md) for private vulnerability reporting guidance. This repository is MIT licensed. TrumpScript is fetched from its MIT-licensed upstream repository during the Docker build; see `THIRD_PARTY_NOTICES.md`.
+## Project documentation
+
+- [`CHANGELOG.md`](CHANGELOG.md) — version history and known limitations
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — development and pull-request guidance
+- [`SECURITY.md`](SECURITY.md) — private vulnerability reporting
+- [`docs/PRODUCTION.md`](docs/PRODUCTION.md) — deployment and operations runbook
+- [`docs/RELEASING.md`](docs/RELEASING.md) — release checklist and repository settings
+- [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md) — TrumpScript attribution
+
+## License
+
+Crazy Race is available under the [MIT License](LICENSE). TrumpScript is fetched from its MIT-licensed upstream repository during the Docker build; see [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
