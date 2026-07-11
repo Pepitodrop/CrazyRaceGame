@@ -1,0 +1,60 @@
+name: Feature request
+description: Propose a focused improvement to Crazy Race
+title: "[Feature]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Explain the user problem first, then the proposed change. Architectural changes should include trade-offs.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or opportunity
+      description: What user need or limitation should be addressed?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the smallest useful implementation
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Include simpler options or workarounds you evaluated
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Primary area
+      options:
+        - Gameplay
+        - Mobile or accessibility
+        - Online rooms
+        - Local pass-and-play
+        - Deployment or operations
+        - R track generation
+        - TrumpScript announcer
+        - Piet interpreter
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: constraints
+    attributes:
+      label: Project constraints
+      options:
+        - label: I considered the server-rendered, no-JavaScript application architecture.
+          required: true
+        - label: I considered the single-instance in-memory room model.
+          required: true
+        - label: I searched existing issues for similar proposals.
+          required: true
