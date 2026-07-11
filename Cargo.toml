@@ -1,12 +1,16 @@
 [package]
 name = "crazy-race-game"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
+rust-version = "1.82"
 description = "A Dockerized 1v1 race game powered by Rust, R, TrumpScript and Piet"
 license = "MIT"
+repository = "https://github.com/Pepitodrop/CrazyRaceGame"
+publish = false
 
 [profile.release]
 strip = true
 lto = true
 codegen-units = 1
 panic = "abort"
+overflow-checks = true

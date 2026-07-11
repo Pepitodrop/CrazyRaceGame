@@ -45,7 +45,12 @@ fn render_landing_page() -> String {
     )
 }
 
-fn render_online_game_page(room: &Room, player_index: usize, track: &[TrackSegment], piet_boost: i32) -> String {
+fn render_online_game_page(
+    room: &Room,
+    player_index: usize,
+    track: &[TrackSegment],
+    piet_boost: i32,
+) -> String {
     let waiting_for_player = room.players.len() < 2;
     let waiting_for_move = !waiting_for_player
         && room.winner.is_none()
@@ -59,6 +64,7 @@ fn render_online_game_page(room: &Room, player_index: usize, track: &[TrackSegme
     let player = &room.players[player_index];
     let opponent = room.players.get(1 - player_index);
     let finish_line = track.len() as i32;
+    let player_card = render_racer(player, finish_line, true);
     let opponent_card = opponent
         .map(|rival| render_racer(rival, finish_line, false))
         .unwrap_or_else(|| {
@@ -66,11 +72,13 @@ fn render_online_game_page(room: &Room, player_index: usize, track: &[TrackSegme
         });
 
     let actions = if waiting_for_player {
-        "<p class=\"notice\">Waiting for the second racer. This page refreshes automatically.</p>".to_string()
+        "<p class=\"notice\">Waiting for the second racer. This page refreshes automatically.</p>"
+            .to_string()
     } else if room.winner.is_some() {
         render_rematch_form(room, &player.token)
     } else if player.submitted.is_some() {
-        "<p class=\"notice\">Move locked. Waiting for your rival; this page refreshes automatically.</p>".to_string()
+        "<p class=\"notice\">Move locked. Waiting for your rival; this page refreshes automatically.</p>"
+            .to_string()
     } else {
         render_action_form("/action", room, &player.token, piet_boost, None)
     };
@@ -78,20 +86,29 @@ fn render_online_game_page(room: &Room, player_index: usize, track: &[TrackSegme
     let winner_banner = winner_banner(room, Some(player_index));
     let content = render_game_layout(
         room,
-        &winner_banner,
-        &render_racer(player, finish_line, true),
-        &opponent_card,
         track,
-        &actions,
-        "Your move",
-        "Online room",
+        GameLayout {
+            winner_banner: &winner_banner,
+            first_card: &player_card,
+            second_card: &opponent_card,
+            actions: &actions,
+            action_title: "Your move",
+            mode_label: "Online room",
+        },
     );
     page_shell("Crazy Race", refresh, &content)
 }
 
-fn render_local_game_page(room: &Room, token: &str, track: &[TrackSegment], piet_boost: i32) -> String {
+fn render_local_game_page(
+    room: &Room,
+    token: &str,
+    track: &[TrackSegment],
+    piet_boost: i32,
+) -> String {
     let finish_line = track.len() as i32;
     let current = room.local_turn.min(1);
+    let first_card = render_racer(&room.players[0], finish_line, current == 0);
+    let second_card = render_racer(&room.players[1], finish_line, current == 1);
     let actions = if room.winner.is_some() {
         render_rematch_form(room, token)
     } else {
@@ -110,35 +127,47 @@ fn render_local_game_page(room: &Room, token: &str, track: &[TrackSegment], piet
         )
     };
 
+    let winner_banner = winner_banner(room, None);
+    let action_title = if room.winner.is_some() {
+        "Local race finished"
+    } else if current == 0 {
+        "Player 1 move"
+    } else {
+        "Player 2 move"
+    };
     let content = render_game_layout(
         room,
-        &winner_banner(room, None),
-        &render_racer(&room.players[0], finish_line, current == 0),
-        &render_racer(&room.players[1], finish_line, current == 1),
         track,
-        &actions,
-        if room.winner.is_some() {
-            "Local race finished"
-        } else if current == 0 {
-            "Player 1 move"
-        } else {
-            "Player 2 move"
+        GameLayout {
+            winner_banner: &winner_banner,
+            first_card: &first_card,
+            second_card: &second_card,
+            actions: &actions,
+            action_title,
+            mode_label: "Local pass-and-play",
         },
-        "Local pass-and-play",
     );
     page_shell("Crazy Race · Local", "", &content)
 }
 
-fn render_game_layout(
-    room: &Room,
-    winner_banner: &str,
-    first_card: &str,
-    second_card: &str,
-    track: &[TrackSegment],
-    actions: &str,
-    action_title: &str,
-    mode_label: &str,
-) -> String {
+struct GameLayout<'a> {
+    winner_banner: &'a str,
+    first_card: &'a str,
+    second_card: &'a str,
+    actions: &'a str,
+    action_title: &'a str,
+    mode_label: &'a str,
+}
+
+fn render_game_layout(room: &Room, track: &[TrackSegment], layout: GameLayout<'_>) -> String {
+    let GameLayout {
+        winner_banner,
+        first_card,
+        second_card,
+        actions,
+        action_title,
+        mode_label,
+    } = layout;
     format!(
         r#"
 <section class="topbar">
@@ -186,7 +215,10 @@ fn winner_banner(room: &Room, perspective: Option<usize>) -> String {
             let message = match perspective {
                 Some(index) if index == winner => "You won the race.".to_string(),
                 Some(_) => format!("{} won the race.", html_escape(&room.players[winner].name)),
-                None => format!("{} wins the local race!", html_escape(&room.players[winner].name)),
+                None => format!(
+                    "{} wins the local race!",
+                    html_escape(&room.players[winner].name)
+                ),
             };
             format!("<div class=\"winner\">{message}</div>")
         })
@@ -259,21 +291,22 @@ fn render_rematch_form(room: &Room, token: &str) -> String {
 }
 
 fn render_track(track: &[TrackSegment]) -> String {
-    track
-        .iter()
-        .enumerate()
-        .map(|(index, segment)| {
-            format!(
-                "<span class=\"segment {}\" title=\"{}: speed {:+}, boost +{}, recovery +{}\">{}</span>",
-                html_escape(&segment.terrain),
-                html_escape(&segment.terrain),
+    let mut output = String::new();
+    for (index, segment) in track.iter().enumerate() {
+        let terrain = html_escape(&segment.terrain);
+        std::fmt::Write::write_fmt(
+            &mut output,
+            format_args!(
+                "<span class=\"segment {terrain}\" title=\"{terrain}: speed {:+}, boost +{}, recovery +{}\">{}</span>",
                 segment.speed,
                 segment.boost,
                 segment.recovery,
                 index + 1
-            )
-        })
-        .collect()
+            ),
+        )
+        .expect("writing to a String cannot fail");
+    }
+    output
 }
 
 fn render_error_page(message: &str) -> String {

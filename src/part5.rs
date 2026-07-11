@@ -64,6 +64,18 @@ mod tests {
         }
     }
 
+    fn test_app() -> AppState {
+        AppState {
+            rooms: HashMap::new(),
+            track: vec![segment("straight"); 8],
+            piet_boost: 3,
+            announcements: vec!["Test announcement.".to_string()],
+            entropy: 42,
+            max_rooms: 10,
+            room_ttl_seconds: 7_200,
+        }
+    }
+
     #[test]
     fn drift_rewards_curves() {
         let straight = movement_for(RaceAction::Drift, 5, &segment("straight"), 3);
@@ -89,5 +101,42 @@ mod tests {
         let page = render_landing_page();
         assert!(page.contains("width=device-width"));
         assert!(page.contains("Local 1v1"));
+    }
+
+    #[test]
+    fn pending_online_move_does_not_reveal_action() {
+        let summary = move_locked_summary("Alice");
+        assert_eq!(summary, "Alice locked in a move. Waiting for the rival.");
+        assert!(!summary.contains("Accelerate"));
+        assert!(!summary.contains("Drift"));
+        assert!(!summary.contains("Boost"));
+    }
+
+    #[test]
+    fn access_tokens_are_256_bit_hex_strings() {
+        let mut app = test_app();
+        let first = next_token(&mut app);
+        let second = next_token(&mut app);
+        assert_eq!(first.len(), 64);
+        assert_eq!(second.len(), 64);
+        assert!(first.bytes().all(|byte| byte.is_ascii_hexdigit()));
+        assert!(second.bytes().all(|byte| byte.is_ascii_hexdigit()));
+        assert_ne!(first, second);
+    }
+
+    #[test]
+    fn room_codes_are_strictly_validated() {
+        assert_eq!(clean_room_code(" abc234 ").unwrap(), "ABC234");
+        assert!(clean_room_code("ABC").is_err());
+        assert!(clean_room_code("ABC10O").is_err());
+        assert!(clean_room_code("ABC-23").is_err());
+    }
+
+    #[test]
+    fn security_headers_disable_caching_and_embedding() {
+        assert!(SECURITY_HEADERS.contains("Cache-Control: no-store"));
+        assert!(SECURITY_HEADERS.contains("Content-Security-Policy:"));
+        assert!(SECURITY_HEADERS.contains("frame-ancestors 'none'"));
+        assert!(SECURITY_HEADERS.contains("Referrer-Policy: no-referrer"));
     }
 }
