@@ -9,6 +9,6 @@ Crazy Race downloads the archived TrumpScript interpreter during its Docker buil
 - License: MIT
 - Copyright: the TrumpScript contributors listed by the upstream project
 
-The Dockerfile applies one compatibility-only change to `src/trumpscript/parser.py`: it supplies `type_ignores=[]` when constructing `ast.Module` so that the 2016 interpreter can execute on a modern Python 3 runtime.
+The Dockerfile applies compatibility-only changes to `src/trumpscript/parser.py` so the 2016 interpreter can execute on modern Python: it supplies `type_ignores=[]` to `ast.Module` and maps the removed `Num`, `Str`, and `NameConstant` constructor aliases to `ast.Constant`. These changes do not alter the TrumpScript grammar or game-specific behavior.
 
 The upstream project's license remains applicable to the downloaded interpreter.
