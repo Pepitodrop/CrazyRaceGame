@@ -1,0 +1,102 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - Cargo.toml
+      - Cargo.lock
+      - CHANGELOG.md
+      - docs/RELEASE_NOTES_v*.md
+      - .github/workflows/release.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  statuses: write
+
+concurrency:
+  group: release-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout validated main
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve release metadata
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(awk -F'"' '/^version = "/ { print $2; exit }' Cargo.toml)"
+          test -n "$version"
+          tag="v${version}"
+          notes_file="docs/RELEASE_NOTES_${tag}.md"
+          test -s "$notes_file"
+          grep -Fq "## [$version]" CHANGELOG.md
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "notes_file=$notes_file" >> "$GITHUB_OUTPUT"
+
+      - name: Create annotated tag
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            remote_sha="$(git ls-remote --tags origin "refs/tags/$TAG^{}" | awk '{print $1}')"
+            if [[ -z "$remote_sha" ]]; then
+              remote_sha="$(git ls-remote --tags origin "refs/tags/$TAG" | awk '{print $1}')"
+            fi
+            test "$remote_sha" = "$GITHUB_SHA" || {
+              echo "Tag $TAG already exists at $remote_sha, expected $GITHUB_SHA. Refusing to move a release tag."
+              exit 1
+            }
+            echo "Tag $TAG already points to this commit."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "$TAG" "$GITHUB_SHA" -m "Crazy Race ${TAG#v}"
+            git push origin "$TAG"
+          fi
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+          VERSION: ${{ steps.release.outputs.version }}
+          NOTES_FILE: ${{ steps.release.outputs.notes_file }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "Release $TAG already exists; leaving it unchanged."
+          else
+            gh release create "$TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --verify-tag \
+              --title "Crazy Race $VERSION" \
+              --notes-file "$NOTES_FILE" \
+              --latest
+          fi
+
+      - name: Record release status
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+        shell: bash
+        run: |
+          gh api \
+            --method POST \
+            "repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" \
+            -f state=success \
+            -f context="release/$TAG" \
+            -f description="Annotated tag and GitHub Release published"
