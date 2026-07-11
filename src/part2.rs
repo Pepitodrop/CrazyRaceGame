@@ -25,15 +25,13 @@ fn resolve_round(room: &mut Room, track: &[TrackSegment], piet_boost: i32, annou
     room.winner = match (first_finished, second_finished) {
         (true, false) => Some(0),
         (false, true) => Some(1),
-        (true, true) => {
-            if room.players[0].distance > room.players[1].distance {
-                Some(0)
-            } else if room.players[1].distance > room.players[0].distance {
-                Some(1)
-            } else {
+        (true, true) => match room.players[0].distance.cmp(&room.players[1].distance) {
+            std::cmp::Ordering::Greater => Some(0),
+            std::cmp::Ordering::Less => Some(1),
+            std::cmp::Ordering::Equal => {
                 Some(((room.seed ^ room.round as u64) & 1) as usize)
             }
-        }
+        },
         (false, false) => None,
     };
 
