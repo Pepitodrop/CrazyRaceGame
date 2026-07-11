@@ -43,4 +43,4 @@ Terminate HTTPS at a reverse proxy. `deploy/Caddyfile.example` and `docs/PRODUCT
 
 Crazy Race 1.0.0 is intended for a single application instance. Active rooms are stored in memory and disappear on restart. Horizontal scaling requires a shared transactional room store. Public deployments must use HTTPS because game URLs contain bearer tokens.
 
-See [CHANGELOG.md](../CHANGELOG.md) for the complete release record and [SECURITY.md](../SECURITY.md) for vulnerability reporting.
+See the [full changelog](https://github.com/Pepitodrop/CrazyRaceGame/blob/v1.0.0/CHANGELOG.md), [production guide](https://github.com/Pepitodrop/CrazyRaceGame/blob/v1.0.0/docs/PRODUCTION.md), and [security policy](https://github.com/Pepitodrop/CrazyRaceGame/blob/v1.0.0/SECURITY.md).
