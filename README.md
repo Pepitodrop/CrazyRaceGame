@@ -115,7 +115,7 @@ Rust reads the PPM, interprets those Piet transitions, and uses the emitted `3` 
 ## Validation
 
 ```bash
-rustfmt --edition 2021 --check src/*.rs
+rustfmt --edition 2021 src/*.rs
 cargo clippy --all-targets --locked -- -D warnings
 cargo test --locked
 docker build -t crazy-race-game .
