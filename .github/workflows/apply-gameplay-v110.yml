@@ -39,23 +39,16 @@ jobs:
           text = text.replace('</details>"#.to_string()', '</details>"##.to_string()', 1)
           path.write_text(text)
           PY
+      - name: Restore migration and workflow files
+        run: |
+          git checkout HEAD -- tools .github/workflows/apply-gameplay-v110.yml .github/workflows/ci.yml
       - name: Install formatter
         uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30
         with:
           toolchain: 1.82.0
           components: rustfmt
-      - name: Format part 1
-        run: rustfmt --edition 2021 src/part1.rs
-      - name: Format part 2
-        run: rustfmt --edition 2021 src/part2.rs
-      - name: Format part 3
-        run: rustfmt --edition 2021 src/part3.rs
-      - name: Format part 4
-        run: rustfmt --edition 2021 src/part4.rs
-      - name: Format part 5
-        run: rustfmt --edition 2021 src/part5.rs
-      - name: Format main
-        run: rustfmt --edition 2021 src/main.rs
+      - name: Format generated Rust
+        run: rustfmt --edition 2021 src/*.rs
       - name: Validate generated diff
         run: git diff --check
       - name: Commit generated changes
