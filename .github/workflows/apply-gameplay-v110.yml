@@ -20,13 +20,20 @@ jobs:
           ref: ${{ github.head_ref }}
           fetch-depth: 0
 
-      - name: Apply source and documentation changes
-        run: |
-          python3 tools/apply_gameplay_core.py
-          python3 tools/apply_gameplay_ui4.py
-          python3 tools/apply_gameplay_ui5.py
-          python3 tools/apply_gameplay_ops.py
-          python3 tools/apply_gameplay_docs.py
+      - name: Apply gameplay core changes
+        run: python3 tools/apply_gameplay_core.py
+
+      - name: Apply gameplay page changes
+        run: python3 tools/apply_gameplay_ui4.py
+
+      - name: Apply gameplay styles and tests
+        run: python3 tools/apply_gameplay_ui5.py
+
+      - name: Apply Docker, CI, and version changes
+        run: python3 tools/apply_gameplay_ops.py
+
+      - name: Apply documentation and cleanup
+        run: python3 tools/apply_gameplay_docs.py
 
       - name: Install formatter
         uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30
