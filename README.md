@@ -1,10 +1,10 @@
 # Crazy Race Game
 
 [![CI](https://github.com/Pepitodrop/CrazyRaceGame/actions/workflows/ci.yml/badge.svg)](https://github.com/Pepitodrop/CrazyRaceGame/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/badge/release-v1.0.0-blue.svg)](CHANGELOG.md)
+[![Release](https://img.shields.io/badge/release-v1.0.1-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-Crazy Race 1.0.0 is a Dockerized, browser-based **1v1 turn-based racing game** built around four deliberately unusual languages:
+Crazy Race 1.0.1 is a Dockerized, browser-based **1v1 turn-based racing game** built around four deliberately unusual languages:
 
 - **Rust**: dependency-free HTTP server, room management, game rules, responsive server-rendered UI, security controls, and the Piet interpreter.
 - **R**: deterministic procedural track generation at container startup.
@@ -31,6 +31,14 @@ Change the deterministic circuit seed with:
 TRACK_SEED=2026 docker compose up --build
 ```
 
+When updating from 1.0.0, remove the old restart-loop container before starting 1.0.1:
+
+```bash
+docker compose down
+git pull --ff-only
+docker compose up --build
+```
+
 ## Production deployment
 
 The hardened production profile binds the application to loopback so it can sit behind a TLS reverse proxy:
@@ -53,7 +61,7 @@ Production safeguards include:
 - automatic expiry of inactive rooms;
 - CSP, cache-control, referrer, framing, permissions, and cross-origin response headers;
 - an HTTP-aware readiness check;
-- end-to-end CI tests against the hardened container configuration.
+- end-to-end CI tests against the actual local and production Compose profiles.
 
 ## Playing modes
 
@@ -127,21 +135,18 @@ rustfmt --edition 2021 src/*.rs
 cargo clippy --all-targets --locked -- -D warnings
 cargo test --locked
 cargo build --release --locked
+docker compose config --quiet
 docker compose -f compose.production.yml config --quiet
-docker build -t crazy-race-game .
-```
-
-Start the application before running the browser-level smoke test:
-
-```bash
+docker compose up -d --build
 bash scripts/smoke-test.sh http://127.0.0.1:8080
+docker compose down
 ```
 
-GitHub Actions additionally verifies the non-root image user, executes the original pinned TrumpScript interpreter, and runs the complete online and local gameplay smoke test inside a read-only, capability-free, resource-limited container.
+GitHub Actions additionally verifies image metadata and the non-root image user, executes the original pinned TrumpScript interpreter, and launches both Compose profiles under their hardened settings.
 
 ## Support boundary
 
-Crazy Race 1.0.0 is suitable for public release and production deployment as a **single-instance hobby, demo, or small-community service** behind HTTPS. It is not an internet-scale multi-tenant platform.
+Crazy Race 1.0.1 is suitable for public release and production deployment as a **single-instance hobby, demo, or small-community service** behind HTTPS. It is not an internet-scale multi-tenant platform.
 
 Active rooms are stored in memory and disappear when the process restarts. Do not deploy multiple replicas without first moving room state to a shared transactional store.
 
