@@ -1,28 +1,58 @@
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct PietOracleResult {
+    value: i32,
+    round_input: i32,
+    terrain_input: i32,
+    comeback_input: i32,
+    energy_input: i32,
+}
+
 fn resolve_round(
     room: &mut Room,
     track: &[TrackSegment],
-    piet_boost: i32,
+    piet_fallback: i32,
     announcements: &[String],
 ) {
     let mut summaries = Vec::new();
     let finish_line = track.len() as i32;
+    let round = room.round;
+    let snapshot: Vec<(i32, i32)> = room
+        .players
+        .iter()
+        .map(|player| (player.distance, player.energy))
+        .collect();
 
-    for player in &mut room.players {
+    for (player_index, player) in room.players.iter_mut().enumerate() {
         let action = player.submitted.take().unwrap_or(RaceAction::Accelerate);
         let segment_index = player.distance.clamp(0, finish_line.saturating_sub(1)) as usize;
         let segment = &track[segment_index];
+        let oracle = adaptive_piet_oracle(
+            round,
+            player_index,
+            &snapshot,
+            segment,
+            player.energy,
+            piet_fallback,
+        );
+        let boost_was_available = action == RaceAction::Boost && player.energy >= 3;
         let (movement, energy_delta, note) =
-            movement_for(action, player.energy, segment, piet_boost);
+            movement_for(action, player.energy, segment, oracle.value);
         player.distance += movement;
         player.energy = (player.energy + energy_delta).clamp(0, 10);
+        let oracle_note = if boost_was_available {
+            format!(" (adaptive Piet +{})", oracle.value)
+        } else {
+            String::new()
+        };
         summaries.push(format!(
-            "{} used {} on {} and moved {} segment{}{}",
+            "{} used {} on {} and moved {} segment{}{}{}",
             player.name,
             action.label(),
             segment.terrain,
             movement,
             if movement == 1 { "" } else { "s" },
-            note
+            note,
+            oracle_note
         ));
     }
 
@@ -80,6 +110,50 @@ fn movement_for(
     }
 }
 
+fn adaptive_piet_oracle(
+    round: u32,
+    player_index: usize,
+    snapshot: &[(i32, i32)],
+    segment: &TrackSegment,
+    energy: i32,
+    fallback: i32,
+) -> PietOracleResult {
+    let own_distance = snapshot
+        .get(player_index)
+        .map(|state| state.0)
+        .unwrap_or_default();
+    let opponent_distance = snapshot
+        .get(1usize.saturating_sub(player_index))
+        .map(|state| state.0)
+        .unwrap_or(own_distance);
+    let round_input = round.min(i32::MAX as u32) as i32;
+    let terrain_input = terrain_code(&segment.terrain);
+    let comeback_input = ((opponent_distance - own_distance).max(0) / 4).clamp(0, 3);
+    let energy_input = (energy.clamp(0, 10) / 3).clamp(0, 3);
+    let inputs = [round_input, terrain_input, comeback_input, energy_input];
+    let value = cached_piet_program()
+        .and_then(|source| run_piet_source_with_inputs(source, &inputs))
+        .unwrap_or(fallback)
+        .clamp(1, 4);
+
+    PietOracleResult {
+        value,
+        round_input,
+        terrain_input,
+        comeback_input,
+        energy_input,
+    }
+}
+
+fn terrain_code(terrain: &str) -> i32 {
+    match terrain {
+        "curve" => 1,
+        "mud" => 2,
+        "jump" => 3,
+        _ => 0,
+    }
+}
+
 fn generate_track(seed: u64) -> Result<Vec<TrackSegment>, String> {
     let status = Command::new("Rscript")
         .args([TRACK_SCRIPT, &seed.to_string(), GENERATED_TRACK])
@@ -129,13 +203,29 @@ enum PietColor {
     Black,
 }
 
-fn run_piet_oracle(path: &str) -> Result<i32, String> {
-    let source =
-        fs::read_to_string(path).map_err(|error| format!("cannot read {path}: {error}"))?;
-    run_piet_source(&source)
+fn load_piet_program(path: &str) -> Result<String, String> {
+    fs::read_to_string(path).map_err(|error| format!("cannot read {path}: {error}"))
 }
 
+fn cached_piet_program() -> Result<&'static str, String> {
+    static SOURCE: std::sync::OnceLock<Result<String, String>> = std::sync::OnceLock::new();
+    SOURCE
+        .get_or_init(|| load_piet_program(PIET_PROGRAM))
+        .as_deref()
+        .map_err(|error| error.clone())
+}
+
+fn run_piet_oracle(path: &str) -> Result<i32, String> {
+    let source = load_piet_program(path)?;
+    run_piet_source_with_inputs(&source, &[1, 0, 0, 1])
+}
+
+#[cfg(test)]
 fn run_piet_source(source: &str) -> Result<i32, String> {
+    run_piet_source_with_inputs(source, &[])
+}
+
+fn run_piet_source_with_inputs(source: &str, inputs: &[i32]) -> Result<i32, String> {
     let mut tokens = Vec::new();
     for line in source.lines() {
         let clean = line.split('#').next().unwrap_or("");
@@ -162,6 +252,7 @@ fn run_piet_source(source: &str) -> Result<i32, String> {
 
     let mut stack: Vec<i32> = Vec::new();
     let mut output: Vec<i32> = Vec::new();
+    let mut input_index = 0usize;
     let mut cursor = 0usize;
     while cursor < colors.len() {
         let current = colors[cursor];
@@ -184,6 +275,7 @@ fn run_piet_source(source: &str) -> Result<i32, String> {
             let hue_change = (next_hue + 6 - hue) % 6;
             let light_change = (next_lightness + 3 - lightness) % 3;
             match (hue_change, light_change) {
+                (0, 0) => {}
                 (0, 1) => stack.push((block_end - cursor) as i32),
                 (0, 2) => {
                     stack.pop();
@@ -198,17 +290,30 @@ fn run_piet_source(source: &str) -> Result<i32, String> {
                         stack.push(if value == 0 { 1 } else { 0 });
                     }
                 }
+                (3, 0) => binary_stack_op(&mut stack, |a, b| if a > b { 1 } else { 0 }),
                 (4, 0) => {
                     if let Some(value) = stack.last().copied() {
                         stack.push(value);
                     }
+                }
+                (4, 2) => {
+                    let value = inputs.get(input_index).copied().ok_or_else(|| {
+                        format!("Piet requested missing numeric input {input_index}")
+                    })?;
+                    input_index += 1;
+                    stack.push(value);
                 }
                 (5, 1) => {
                     if let Some(value) = stack.pop() {
                         output.push(value);
                     }
                 }
-                _ => {}
+                command => {
+                    return Err(format!(
+                        "unsupported linear Piet command ({}, {})",
+                        command.0, command.1
+                    ));
+                }
             }
         }
         cursor = block_end;

@@ -43,7 +43,7 @@ fn render_landing_page() -> String {
 </section>
 <section class="card stack-note">
   <h2>Four-language engine</h2>
-  <p><strong>R</strong> generates the circuit. <strong>Rust</strong> owns networking and game state. <strong>TrumpScript</strong> runs the announcer through its original Python interpreter. <strong>Piet</strong> paints the boost value.</p>
+  <p><strong>R</strong> generates the circuit. <strong>Rust</strong> owns networking and game state. <strong>TrumpScript</strong> runs the announcer through its original Python interpreter. <strong>Piet</strong> reads the live round, terrain, comeback gap, and energy state to calculate a changing boost.</p>
 </section>
 "#,
     )
@@ -294,7 +294,9 @@ fn render_action_form(
     player_index: Option<usize>,
     track: &[TrackSegment],
 ) -> String {
-    let index = player_index.unwrap_or(0).min(room.players.len().saturating_sub(1));
+    let index = player_index
+        .unwrap_or(0)
+        .min(room.players.len().saturating_sub(1));
     let player = &room.players[index];
     let finish = track.len().max(1);
     let segment_index = (player.distance.max(0) as usize).min(finish - 1);
@@ -302,6 +304,19 @@ fn render_action_form(
     let player_hint = format!(
         "<p class=\"current-player\">Choosing for <strong>{}</strong></p>",
         html_escape(&player.name)
+    );
+    let snapshot: Vec<(i32, i32)> = room
+        .players
+        .iter()
+        .map(|racer| (racer.distance, racer.energy))
+        .collect();
+    let oracle = adaptive_piet_oracle(
+        room.round,
+        index,
+        &snapshot,
+        segment,
+        player.energy,
+        piet_boost,
     );
     let boost_disabled = if player.energy < 3 {
         "disabled aria-disabled=\"true\" title=\"Piet Boost needs 3 energy\""
@@ -316,7 +331,7 @@ fn render_action_form(
 <input type="hidden" name="token" value="{token}">
 <button type="submit" name="action" value="accelerate"><strong>Accelerate</strong><span>Base 2 + terrain speed · costs 1 energy</span></button>
 <button type="submit" name="action" value="drift"><strong>Drift</strong><span>Curve bonus · restores this segment’s recovery energy</span></button>
-<button type="submit" name="action" value="boost" {boost_disabled}><strong>Piet Boost</strong><span>Oracle +{piet_boost} and terrain bonus · costs 3 energy{boost_note}</span></button>
+<button type="submit" name="action" value="boost" {boost_disabled}><strong>Piet Boost · +{piet_value}</strong><span>Adaptive inputs: round {round_input}, terrain {terrain_input}, comeback {comeback_input}, energy {energy_input} · costs 3 energy{boost_note}</span></button>
 </form>"#,
         player_hint = player_hint,
         endpoint = html_escape(endpoint),
@@ -329,7 +344,11 @@ fn render_action_form(
         symbol = terrain_symbol(&segment.terrain),
         energy = player.energy,
         boost_disabled = boost_disabled,
-        piet_boost = piet_boost,
+        piet_value = oracle.value,
+        round_input = oracle.round_input,
+        terrain_input = oracle.terrain_input,
+        comeback_input = oracle.comeback_input,
+        energy_input = oracle.energy_input,
         boost_note = if player.energy < 3 {
             " · unavailable now"
         } else {

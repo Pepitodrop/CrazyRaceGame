@@ -1,10 +1,10 @@
 # Crazy Race Game
 
 [![CI](https://github.com/Pepitodrop/CrazyRaceGame/actions/workflows/ci.yml/badge.svg)](https://github.com/Pepitodrop/CrazyRaceGame/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/badge/release-v1.0.3-blue.svg)](CHANGELOG.md)
+[![Release](https://img.shields.io/badge/release-v1.1.0-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-Crazy Race 1.0.3 is a Dockerized, browser-based **1v1 turn-based racing game** powered by Rust, R, TrumpScript, and Piet.
+Crazy Race 1.1.0 is a Dockerized, browser-based **1v1 turn-based racing game** powered by Rust, R, TrumpScript, and Piet.
 
 - **Rust** runs the HTTP server, rooms, game rules, HTML UI, security controls, and Piet interpreter.
 - **R** generates the 20-segment circuit when the container starts.
@@ -69,7 +69,9 @@ The badge at the top shows the round you are about to play. The announcer text d
 
 - Requires at least `3` energy.
 - Costs `3` energy.
-- Adds the Piet oracle output, currently `3`, plus the terrain speed and boost values.
+- Runs the Piet image program with four live inputs: round, terrain code, comeback gap, and energy bucket.
+- The image calculates `1 + ((round + terrain + comeback + energy) mod 4)`, producing a deterministic `+1` to `+4`.
+- The button previews the exact Piet output before submission, and Rust clamps the result to the safe range `1..=4`.
 - The button is disabled when the current racer does not have enough energy.
 
 ### Local pass-and-play
@@ -154,7 +156,7 @@ The Docker build fetches `samshadwell/TrumpScript@3793b905925b55c0296b066586c7d6
 
 ### Piet
 
-`piet/boost_oracle.ppm` is executable image source. Its codel transitions push and output `3`, which Rust applies as the oracle boost modifier.
+`piet/boost_oracle.ppm` is executable image source. It uses Piet numeric input, stack arithmetic, modulo, push, add, and numeric output to turn live race state into a deterministic adaptive boost between `+1` and `+4`.
 
 ## Validation
 
@@ -172,7 +174,7 @@ docker compose down
 
 ## Support boundary
 
-Crazy Race 1.0.3 is suitable for public release as a **single-instance hobby, demo, or small-community service** behind HTTPS. Rooms are held in memory and disappear after restart. Horizontal replicas require a shared transactional room store first.
+Crazy Race 1.1.0 is suitable for public release as a **single-instance hobby, demo, or small-community service** behind HTTPS. Rooms are held in memory and disappear after restart. Horizontal replicas require a shared transactional room store first.
 
 Player tokens are bearer credentials in game URLs. Public deployments must use HTTPS.
 

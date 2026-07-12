@@ -8,6 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 No unreleased changes.
 
+## [1.1.0] - 2026-07-13
+
+### Added
+
+- Adaptive Piet oracle inputs for round, terrain, comeback gap, and energy.
+- Live Piet boost preview in both online and local controls.
+- Piet numeric-input and comparison support in the bounded linear interpreter.
+
+### Changed
+
+- Piet Boost now varies deterministically from `+1` to `+4` instead of always returning a fixed `+3`.
+- Round summaries report the adaptive Piet result used for successful boosts.
+- The Piet easter egg and README explain the real image algorithm.
+
 ## [1.0.3] - 2026-07-13
 
 ### Fixed
@@ -73,7 +87,8 @@ No unreleased changes.
 - Horizontal scaling is not supported until room state is moved to a shared transactional store.
 - Public deployments must terminate HTTPS at a reverse proxy because access tokens are bearer credentials contained in game URLs.
 
-[Unreleased]: https://github.com/Pepitodrop/CrazyRaceGame/compare/v1.0.3...HEAD
+[Unreleased]: https://github.com/Pepitodrop/CrazyRaceGame/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/Pepitodrop/CrazyRaceGame/compare/v1.0.3...v1.1.0
 [1.0.3]: https://github.com/Pepitodrop/CrazyRaceGame/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/Pepitodrop/CrazyRaceGame/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/Pepitodrop/CrazyRaceGame/compare/v1.0.0...v1.0.1

@@ -1,6 +1,6 @@
 [package]
 name = "crazy-race-game"
-version = "1.0.3"
+version = "1.1.0"
 edition = "2021"
 rust-version = "1.82"
 description = "A Dockerized 1v1 race game powered by Rust, R, TrumpScript and Piet"

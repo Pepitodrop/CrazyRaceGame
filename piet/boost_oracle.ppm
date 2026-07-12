@@ -1,7 +1,7 @@
 P3
-# A real linear Piet program.
-# 3 light-red codels -> red executes PUSH 3.
-# red -> dark-magenta executes OUT(number), yielding the boost oracle value 3.
-5 1
+# Adaptive linear Piet oracle.
+# Inputs, in order: round, terrain code, comeback bucket, energy bucket.
+# It adds all four inputs, computes modulo 4, adds 1, and outputs 1..4.
+16 1
 255
-255 192 192   255 192 192   255 192 192   255 0 0   192 0 192
+255 192 192   0 0 192   0 255 0   0 255 255   255 255 192   192 255 192   192 0 0   192 192 0   192 192 0   192 192 0   192 192 0   255 255 192   0 255 255   0 192 192   0 0 192   192 255 255
