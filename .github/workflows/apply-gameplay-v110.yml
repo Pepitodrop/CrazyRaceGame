@@ -41,13 +41,19 @@ jobs:
           toolchain: 1.82.0
           components: rustfmt
 
-      - name: Format and commit generated changes
+      - name: Format generated Rust
+        run: rustfmt --edition 2021 src/*.rs
+
+      - name: Validate generated diff
+        run: git diff --check
+
+      - name: Commit generated changes
         run: |
           set -euo pipefail
-          rustfmt --edition 2021 src/*.rs
-          git diff --check
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
           git add -A
           git commit -m "Improve gameplay clarity and Snap Docker compatibility"
-          git push origin HEAD:${{ github.head_ref }}
+
+      - name: Push generated changes
+        run: git push origin HEAD:${{ github.head_ref }}
