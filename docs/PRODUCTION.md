@@ -2,6 +2,12 @@
 
 Crazy Race is production-ready for a **single application instance**. Game rooms live in process memory, so do not run multiple replicas behind a load balancer unless room state is moved to a shared store first.
 
+## Docker package compatibility
+
+Ubuntu's Snap-packaged Docker applies an AppArmor policy that can reject `no-new-privileges` container startup. The default `docker-compose.yml` omits that one flag so local development works with Snap Docker while retaining the non-root user, read-only filesystem, dropped capabilities, and resource limits.
+
+For public production deployment, use Docker Engine from Docker's official packages or Docker Desktop and launch `compose.production.yml`, which retains `no-new-privileges`.
+
 ## 1. Configure
 
 Copy the environment template and adjust the limits for the host:

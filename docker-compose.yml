@@ -14,8 +14,9 @@ services:
       - /tmp:size=16m,mode=1777,noexec,nosuid,nodev
     cap_drop:
       - ALL
-    security_opt:
-      - no-new-privileges:true
+    # The local profile intentionally omits no-new-privileges because Snap Docker's
+    # AppArmor policy rejects container exec with that flag. The production profile
+    # keeps the stronger restriction and should run on Docker Engine or Docker Desktop.
     pids_limit: 256
     mem_limit: 256m
     cpus: 1.0

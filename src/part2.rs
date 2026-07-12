@@ -6,14 +6,17 @@ fn resolve_round(
 ) {
     let mut summaries = Vec::new();
     let finish_line = track.len() as i32;
+    let mut finish_scores = [0_i32; 2];
 
-    for player in &mut room.players {
-        let action = player.submitted.take().unwrap_or(RaceAction::Accelerate);
+    for (index, player) in room.players.iter_mut().enumerate() {
+        let action = player.submitted.take().unwrap_or(RaceAction::Drift);
         let segment_index = player.distance.clamp(0, finish_line.saturating_sub(1)) as usize;
         let segment = &track[segment_index];
         let (movement, energy_delta, note) =
             movement_for(action, player.energy, segment, piet_boost);
-        player.distance += movement;
+        let raw_distance = player.distance.saturating_add(movement);
+        finish_scores[index] = raw_distance;
+        player.distance = raw_distance.min(finish_line);
         player.energy = (player.energy + energy_delta).clamp(0, 10);
         summaries.push(format!(
             "{} used {} on {} and moved {} segment{}{}",
@@ -26,15 +29,18 @@ fn resolve_round(
         ));
     }
 
-    let first_finished = room.players[0].distance >= finish_line;
-    let second_finished = room.players[1].distance >= finish_line;
+    let first_finished = finish_scores[0] >= finish_line;
+    let second_finished = finish_scores[1] >= finish_line;
     room.winner = match (first_finished, second_finished) {
         (true, false) => Some(0),
         (false, true) => Some(1),
-        (true, true) => match room.players[0].distance.cmp(&room.players[1].distance) {
+        (true, true) => match finish_scores[0].cmp(&finish_scores[1]) {
             std::cmp::Ordering::Greater => Some(0),
             std::cmp::Ordering::Less => Some(1),
-            std::cmp::Ordering::Equal => Some(((room.seed ^ room.round as u64) & 1) as usize),
+            std::cmp::Ordering::Equal => {
+                summaries.push("The racers reached the finish equally; the deterministic photo-finish rule decided the winner".to_string());
+                Some(((room.seed ^ room.round as u64) & 1) as usize)
+            }
         },
         (false, false) => None,
     };
@@ -58,7 +64,8 @@ fn movement_for(
     piet_boost: i32,
 ) -> (i32, i32, &'static str) {
     match action {
-        RaceAction::Accelerate => ((2 + segment.speed).clamp(1, 6), -1, ""),
+        RaceAction::Accelerate if energy >= 1 => ((2 + segment.speed).clamp(1, 6), -1, ""),
+        RaceAction::Accelerate => (1, 1, " but had no energy and coasted"),
         RaceAction::Drift => {
             let terrain_bonus = match segment.terrain.as_str() {
                 "curve" => 3,
@@ -78,6 +85,37 @@ fn movement_for(
         ),
         RaceAction::Boost => (1, 1, " but lacked energy"),
     }
+}
+
+fn validate_action_energy(action: RaceAction, energy: i32) -> Result<(), RouteError> {
+    match action {
+        RaceAction::Accelerate if energy < 1 => Err((
+            "409 Conflict",
+            "Accelerate requires 1 energy. Choose Drift to recover energy.".to_string(),
+        )),
+        RaceAction::Boost if energy < 3 => Err((
+            "409 Conflict",
+            "Piet Boost requires 3 energy. Choose Drift to recover energy.".to_string(),
+        )),
+        _ => Ok(()),
+    }
+}
+
+fn track_for_room(base: &[TrackSegment], seed: u64) -> Vec<TrackSegment> {
+    let mut track = base.to_vec();
+    if track.len() <= 3 {
+        return track;
+    }
+
+    let mut state = seed ^ 0xA076_1D64_78BD_642F;
+    for index in (2..track.len() - 1).rev() {
+        state ^= state << 13;
+        state ^= state >> 7;
+        state ^= state << 17;
+        let target = 1 + (state as usize % index);
+        track.swap(index, target);
+    }
+    track
 }
 
 fn generate_track(seed: u64) -> Result<Vec<TrackSegment>, String> {

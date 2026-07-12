@@ -133,24 +133,15 @@ fn main() {
         .ok()
         .and_then(|value| value.parse::<u64>().ok())
         .unwrap_or(42);
-    let max_connections = env_usize(
-        "MAX_CONNECTIONS",
-        DEFAULT_MAX_CONNECTIONS,
-        1,
-        4_096,
-    );
+    let max_connections = env_usize("MAX_CONNECTIONS", DEFAULT_MAX_CONNECTIONS, 1, 4_096);
     let max_rooms = env_usize("MAX_ROOMS", DEFAULT_MAX_ROOMS, 1, 100_000);
-    let room_ttl_seconds = env_u64(
-        "ROOM_TTL_SECONDS",
-        DEFAULT_ROOM_TTL_SECONDS,
-        60,
-        604_800,
-    );
+    let room_ttl_seconds = env_u64("ROOM_TTL_SECONDS", DEFAULT_ROOM_TTL_SECONDS, 60, 604_800);
 
     let track = generate_track(seed).unwrap_or_else(|error| {
         eprintln!("R track generation failed ({error}); loading fallback track.");
-        load_track(FALLBACK_TRACK)
-            .unwrap_or_else(|fallback_error| panic!("failed to load fallback track: {fallback_error}"))
+        load_track(FALLBACK_TRACK).unwrap_or_else(|fallback_error| {
+            panic!("failed to load fallback track: {fallback_error}")
+        })
     });
 
     let piet_boost = run_piet_oracle(PIET_PROGRAM).unwrap_or_else(|error| {
@@ -268,6 +259,12 @@ fn route_request(
             "200 OK",
             "text/html; charset=utf-8",
             render_landing_page(),
+            Vec::new(),
+        )),
+        ("GET", "/favicon.svg") => Ok((
+            "200 OK",
+            "image/svg+xml; charset=utf-8",
+            render_favicon_svg(),
             Vec::new(),
         )),
         ("GET", "/health") => Ok((
@@ -414,6 +411,15 @@ fn first_announcement(app: &AppState) -> String {
         .unwrap_or_else(|| "Race ready.".to_string())
 }
 
+fn room_track(app: &AppState, code: &str) -> Result<Vec<TrackSegment>, RouteError> {
+    let seed = app
+        .rooms
+        .get(code)
+        .ok_or(("404 Not Found", "Room not found.".to_string()))?
+        .seed;
+    Ok(track_for_room(&app.track, seed))
+}
+
 fn show_game(
     request: &HttpRequest,
     state: &Arc<Mutex<AppState>>,
@@ -421,7 +427,7 @@ fn show_game(
     let code = clean_room_code(&required_query(request, "room")?)?;
     let token = required_query(request, "token")?;
     let mut app = state.lock().map_err(|_| internal_error())?;
-    let track = app.track.clone();
+    let track = room_track(&app, &code)?;
     let piet_boost = app.piet_boost;
     let room = app
         .rooms
@@ -450,7 +456,7 @@ fn show_local_game(
     let code = clean_room_code(&required_query(request, "room")?)?;
     let token = required_query(request, "token")?;
     let mut app = state.lock().map_err(|_| internal_error())?;
-    let track = app.track.clone();
+    let track = room_track(&app, &code)?;
     let piet_boost = app.piet_boost;
     let room = app
         .rooms
@@ -471,7 +477,7 @@ fn submit_action(
     let action = parse_action(request)?;
 
     let mut app = state.lock().map_err(|_| internal_error())?;
-    let track = app.track.clone();
+    let track = room_track(&app, &code)?;
     let piet_boost = app.piet_boost;
     let announcements = app.announcements.clone();
     let room = app
@@ -486,16 +492,10 @@ fn submit_action(
         ));
     }
     if room.players.len() != 2 {
-        return Err((
-            "409 Conflict",
-            "Wait for a second racer.".to_string(),
-        ));
+        return Err(("409 Conflict", "Wait for a second racer.".to_string()));
     }
     if room.winner.is_some() {
-        return Err((
-            "409 Conflict",
-            "The race is already finished.".to_string(),
-        ));
+        return Err(("409 Conflict", "The race is already finished.".to_string()));
     }
 
     let player_index = room
@@ -509,15 +509,12 @@ fn submit_action(
             "Your move is already locked in.".to_string(),
         ));
     }
+    validate_action_energy(action, room.players[player_index].energy)?;
 
     room.players[player_index].submitted = Some(action);
     room.last_activity = now_epoch();
     room.last_summary = move_locked_summary(&room.players[player_index].name);
-    if room
-        .players
-        .iter()
-        .all(|player| player.submitted.is_some())
-    {
+    if room.players.iter().all(|player| player.submitted.is_some()) {
         resolve_round(room, &track, piet_boost, &announcements);
     }
     Ok(redirect_to_game(&code, &token))
@@ -536,7 +533,7 @@ fn submit_local_action(
     let action = parse_action(request)?;
 
     let mut app = state.lock().map_err(|_| internal_error())?;
-    let track = app.track.clone();
+    let track = room_track(&app, &code)?;
     let piet_boost = app.piet_boost;
     let announcements = app.announcements.clone();
     let room = app
@@ -545,10 +542,7 @@ fn submit_local_action(
         .ok_or(("404 Not Found", "Local game not found.".to_string()))?;
     ensure_local_access(room, &token)?;
     if room.winner.is_some() {
-        return Err((
-            "409 Conflict",
-            "The race is already finished.".to_string(),
-        ));
+        return Err(("409 Conflict", "The race is already finished.".to_string()));
     }
 
     let turn = room.local_turn.min(1);
@@ -558,6 +552,7 @@ fn submit_local_action(
             "That move is already locked in.".to_string(),
         ));
     }
+    validate_action_energy(action, room.players[turn].energy)?;
     room.players[turn].submitted = Some(action);
     room.last_activity = now_epoch();
 
@@ -587,31 +582,41 @@ fn rematch(
     let code = clean_room_code(&required_body(request, "room")?)?;
     let token = required_body(request, "token")?;
     let mut app = state.lock().map_err(|_| internal_error())?;
+
+    let mode = {
+        let room = app
+            .rooms
+            .get(&code)
+            .ok_or(("404 Not Found", "Room not found.".to_string()))?;
+        let allowed = match room.mode {
+            GameMode::Online => room.players.iter().any(|player| player.token == token),
+            GameMode::Local => room.local_token.as_deref() == Some(token.as_str()),
+        };
+        if !allowed {
+            return Err(("403 Forbidden", "Invalid racer token.".to_string()));
+        }
+        room.mode
+    };
+
+    let next_seed = next_random(&mut app);
     let room = app
         .rooms
         .get_mut(&code)
         .ok_or(("404 Not Found", "Room not found.".to_string()))?;
-
-    let allowed = match room.mode {
-        GameMode::Online => room.players.iter().any(|player| player.token == token),
-        GameMode::Local => room.local_token.as_deref() == Some(token.as_str()),
-    };
-    if !allowed {
-        return Err(("403 Forbidden", "Invalid racer token.".to_string()));
-    }
-
     for player in &mut room.players {
         player.distance = 0;
         player.energy = 5;
         player.submitted = None;
     }
+    room.seed = next_seed;
     room.local_turn = 0;
     room.round = 1;
     room.winner = None;
     room.last_activity = now_epoch();
-    room.last_summary = "Rematch started. Choose your move.".to_string();
+    room.last_summary =
+        "Rematch started on a newly shuffled circuit. Choose your move.".to_string();
 
-    Ok(match room.mode {
+    Ok(match mode {
         GameMode::Online => redirect_to_game(&code, &token),
         GameMode::Local => redirect_to_local_game(&code, &token),
     })
@@ -619,16 +624,10 @@ fn rematch(
 
 fn ensure_local_access(room: &Room, token: &str) -> Result<(), RouteError> {
     if room.mode != GameMode::Local {
-        return Err((
-            "409 Conflict",
-            "That room is an online race.".to_string(),
-        ));
+        return Err(("409 Conflict", "That room is an online race.".to_string()));
     }
     if room.local_token.as_deref() != Some(token) {
-        return Err((
-            "403 Forbidden",
-            "Invalid local-game token.".to_string(),
-        ));
+        return Err(("403 Forbidden", "Invalid local-game token.".to_string()));
     }
     Ok(())
 }

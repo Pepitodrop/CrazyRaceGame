@@ -17,17 +17,24 @@ query_value() {
   printf '%s' "$url" | sed -n "s/.*[?&]${key}=\([^&]*\).*/\1/p"
 }
 
+track_signature() {
+  grep -o 'data-track-signature="[^"]*"' "$1" | head -1 | cut -d'"' -f2
+}
+
 curl --fail --silent --show-error \
   --dump-header "$temp_dir/landing.headers" \
   --output "$temp_dir/landing.html" \
   "$base_url/"
 
 grep -q 'Local 1v1' "$temp_dir/landing.html"
+grep -q 'rel="icon"' "$temp_dir/landing.html"
 grep -qi '^content-security-policy:' "$temp_dir/landing.headers"
 grep -qi '^cache-control: no-store' "$temp_dir/landing.headers"
 grep -qi '^referrer-policy: no-referrer' "$temp_dir/landing.headers"
 grep -qi '^x-frame-options: DENY' "$temp_dir/landing.headers"
 
+curl --fail --silent --show-error --output "$temp_dir/favicon.svg" "$base_url/favicon.svg"
+grep -q '<svg' "$temp_dir/favicon.svg"
 test "$(curl --fail --silent --show-error "$base_url/health")" = "ok"
 
 player_one_location="$(request_location \
@@ -46,6 +53,15 @@ player_two_location="$(request_location \
   "$base_url/join")"
 player_two_token="$(query_value "$player_two_location" token)"
 test "${#player_two_token}" -eq 64
+
+curl --fail --silent --show-error --output "$temp_dir/game.html" "$base_url$player_one_location"
+grep -q 'Segment 0 of 20' "$temp_dir/game.html"
+grep -q 'Energy' "$temp_dir/game.html"
+grep -q 'Straight' "$temp_dir/game.html"
+grep -q 'Curve' "$temp_dir/game.html"
+grep -q 'Mud' "$temp_dir/game.html"
+grep -q 'Jump' "$temp_dir/game.html"
+grep -q 'Reveal the Piet boost program' "$temp_dir/game.html"
 
 curl --fail --silent --show-error \
   --request POST \
@@ -78,6 +94,7 @@ curl --fail --silent --show-error \
 grep -q 'Round 1:' "$temp_dir/resolved.html"
 grep -q 'Alice used Accelerate' "$temp_dir/resolved.html"
 grep -q 'Bob used Drift' "$temp_dir/resolved.html"
+grep -q 'Segment ' "$temp_dir/resolved.html"
 
 local_location="$(request_location \
   --request POST \
@@ -92,6 +109,8 @@ curl --fail --silent --show-error \
   --output "$temp_dir/local-one.html" \
   "$base_url$local_location"
 grep -q 'Player 1 move' "$temp_dir/local-one.html"
+first_signature="$(track_signature "$temp_dir/local-one.html")"
+test "${#first_signature}" -eq 20
 
 curl --fail --silent --show-error \
   --request POST \
@@ -106,6 +125,33 @@ curl --fail --silent --show-error \
   "$base_url$local_location"
 grep -q 'Player 2 move' "$temp_dir/local-two.html"
 grep -q 'Carol has chosen. Pass the device to Dave' "$temp_dir/local-two.html"
+
+curl --fail --silent --show-error \
+  --request POST \
+  --data-urlencode "room=$local_room" \
+  --data-urlencode "token=$local_token" \
+  --data-urlencode 'action=drift' \
+  --output /dev/null \
+  "$base_url/local-action"
+
+invalid_boost_status="$(curl --silent --output "$temp_dir/invalid-boost.html" --write-out '%{http_code}' \
+  --request POST \
+  --data-urlencode "room=$local_room" \
+  --data-urlencode "token=$local_token" \
+  --data-urlencode 'action=boost' \
+  "$base_url/local-action")"
+test "$invalid_boost_status" = "409"
+grep -q 'Piet Boost requires 3 energy' "$temp_dir/invalid-boost.html"
+
+second_local_location="$(request_location \
+  --request POST \
+  --data-urlencode 'player_one=Erin' \
+  --data-urlencode 'player_two=Frank' \
+  "$base_url/local")"
+curl --fail --silent --show-error --output "$temp_dir/local-second-room.html" "$base_url$second_local_location"
+second_signature="$(track_signature "$temp_dir/local-second-room.html")"
+test "${#second_signature}" -eq 20
+test "$first_signature" != "$second_signature"
 
 large_name="$(head -c 9000 /dev/zero | tr '\0' 'a')"
 status_code="$(curl --silent --output /dev/null --write-out '%{http_code}' \

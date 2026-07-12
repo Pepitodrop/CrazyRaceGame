@@ -12,7 +12,7 @@ const SECURITY_HEADERS: &str = concat!(
     "Cross-Origin-Opener-Policy: same-origin\r\n",
     "Cross-Origin-Resource-Policy: same-origin\r\n",
     "Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()\r\n",
-    "Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'\r\n"
+    "Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; img-src 'self' data:; form-action 'self'; base-uri 'none'; frame-ancestors 'none'\r\n"
 );
 
 fn run_healthcheck() -> bool {

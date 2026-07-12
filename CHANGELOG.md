@@ -8,6 +8,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 No unreleased changes.
 
+## [1.1.0] - 2026-07-12
+
+### Added
+
+- Added a proper SVG browser-tab icon.
+- Added a collapsible Piet source-painting easter egg to every race page.
+- Added visible terrain symbols, color-matched legend cards, and P1/P2 position markers.
+- Added explicit segment, current-terrain, and energy meters to racer cards.
+
+### Changed
+
+- Every room now receives its own deterministic shuffle of the R-generated circuit; rematches shuffle again.
+- Unaffordable Accelerate and Piet Boost actions are disabled in the UI and rejected by the server.
+- Finish progress is capped at the actual segment count while overshoot remains internal to same-round winner resolution.
+- The default Compose profile is compatible with Snap Docker; the production profile retains `no-new-privileges`.
+
+### Fixed
+
+- Clarified terrain colors and symbols that were previously too small to read reliably.
+- Removed confusing values such as `25 / 20` from the racer display.
+- Added CI coverage for favicon delivery, circuit variation, energy validation, terrain legend rendering, and the Piet easter egg.
+
 ## [1.0.1] - 2026-07-12
 
 ### Fixed
@@ -43,6 +65,7 @@ No unreleased changes.
 - Horizontal scaling is not supported until room state is moved to a shared transactional store.
 - Public deployments must terminate HTTPS at a reverse proxy because access tokens are bearer credentials contained in game URLs.
 
-[Unreleased]: https://github.com/Pepitodrop/CrazyRaceGame/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/Pepitodrop/CrazyRaceGame/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/Pepitodrop/CrazyRaceGame/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/Pepitodrop/CrazyRaceGame/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/Pepitodrop/CrazyRaceGame/releases/tag/v1.0.0
