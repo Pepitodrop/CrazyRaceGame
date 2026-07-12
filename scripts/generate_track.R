@@ -1,9 +1,11 @@
 args <- commandArgs(trailingOnly = TRUE)
-seed <- if (length(args) >= 1) suppressWarnings(as.integer(args[[1]])) else 42L
+seed <- if (length(args) >= 1) suppressWarnings(as.integer(args[[1]])) else 0L
 output <- if (length(args) >= 2) args[[2]] else "/tmp/crazy-race-track.tsv"
 
-if (is.na(seed)) {
-  seed <- 42L
+# A seed of 0 means "fresh track for this server start". Any positive seed
+# remains reproducible for tests, demos, and production rollbacks.
+if (is.na(seed) || seed <= 0L) {
+  seed <- as.integer((as.numeric(Sys.time()) * 1000) %% .Machine$integer.max)
 }
 
 set.seed(seed)
