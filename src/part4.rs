@@ -316,7 +316,7 @@ fn render_action_form(
 <input type="hidden" name="token" value="{token}">
 <button type="submit" name="action" value="accelerate"><strong>Accelerate</strong><span>Base 2 + terrain speed · costs 1 energy</span></button>
 <button type="submit" name="action" value="drift"><strong>Drift</strong><span>Curve bonus · restores this segment’s recovery energy</span></button>
-<button type="submit" name="action" value="boost" {boost_disabled}><strong>Piet Boost</strong><span>Piet + terrain bonus · costs 3 energy{boost_note}</span></button>
+<button type="submit" name="action" value="boost" {boost_disabled}><strong>Piet Boost</strong><span>Oracle +{piet_boost} and terrain bonus · costs 3 energy{boost_note}</span></button>
 </form>"#,
         player_hint = player_hint,
         endpoint = html_escape(endpoint),
@@ -329,12 +329,12 @@ fn render_action_form(
         symbol = terrain_symbol(&segment.terrain),
         energy = player.energy,
         boost_disabled = boost_disabled,
+        piet_boost = piet_boost,
         boost_note = if player.energy < 3 {
             " · unavailable now"
         } else {
             ""
         },
-        _boost = piet_boost,
     )
 }
 
