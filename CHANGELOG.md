@@ -8,6 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 No unreleased changes.
 
+## [1.1.0] - 2026-07-13
+
+### Added
+
+- Adaptive Piet oracle inputs for round, terrain, comeback gap, and energy.
+- Live Piet boost preview in both online and local controls.
+- Piet numeric-input and comparison support in the bounded linear interpreter.
+
+### Changed
+
+- Piet Boost now varies deterministically from `+1` to `+4` instead of always returning a fixed `+3`.
+- Round summaries report the adaptive Piet result used for successful boosts.
+- The Piet easter egg and README explain the real image algorithm.
+
 ## [1.0.3] - 2026-07-13
 
 ### Fixed

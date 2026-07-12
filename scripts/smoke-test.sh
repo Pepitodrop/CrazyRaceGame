@@ -23,6 +23,7 @@ curl --fail --silent --show-error \
   "$base_url/"
 
 grep -q 'Local 1v1' "$temp_dir/landing.html"
+grep -q 'Piet</strong> reads the live round' "$temp_dir/landing.html"
 grep -q 'rel="icon"' "$temp_dir/landing.html"
 grep -qi '^content-security-policy:' "$temp_dir/landing.headers"
 grep -qi "^content-security-policy:.*img-src 'self' data:" "$temp_dir/landing.headers"
@@ -80,6 +81,7 @@ curl --fail --silent --show-error \
 grep -q 'Round 1:' "$temp_dir/resolved.html"
 grep -q 'Alice used Accelerate' "$temp_dir/resolved.html"
 grep -q 'Bob used Drift' "$temp_dir/resolved.html"
+grep -q 'Piet Boost · +' "$temp_dir/resolved.html"
 
 local_location="$(request_location \
   --request POST \

@@ -60,9 +60,18 @@ fn render_piet_easter_egg() -> String {
     if iter.next() != Some("P3") {
         return String::new();
     }
-    let width = iter.next().and_then(|value| value.parse::<usize>().ok()).unwrap_or(0);
-    let height = iter.next().and_then(|value| value.parse::<usize>().ok()).unwrap_or(0);
-    let max_value = iter.next().and_then(|value| value.parse::<u16>().ok()).unwrap_or(0);
+    let width = iter
+        .next()
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(0);
+    let height = iter
+        .next()
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(0);
+    let max_value = iter
+        .next()
+        .and_then(|value| value.parse::<u16>().ok())
+        .unwrap_or(0);
     if width == 0 || height == 0 || max_value != 255 {
         return String::new();
     }
@@ -70,9 +79,18 @@ fn render_piet_easter_egg() -> String {
     let codel_size = 36usize;
     let mut rectangles = String::new();
     for index in 0..width.saturating_mul(height) {
-        let red = iter.next().and_then(|value| value.parse::<u8>().ok()).unwrap_or(0);
-        let green = iter.next().and_then(|value| value.parse::<u8>().ok()).unwrap_or(0);
-        let blue = iter.next().and_then(|value| value.parse::<u8>().ok()).unwrap_or(0);
+        let red = iter
+            .next()
+            .and_then(|value| value.parse::<u8>().ok())
+            .unwrap_or(0);
+        let green = iter
+            .next()
+            .and_then(|value| value.parse::<u8>().ok())
+            .unwrap_or(0);
+        let blue = iter
+            .next()
+            .and_then(|value| value.parse::<u8>().ok())
+            .unwrap_or(0);
         let x = (index % width) * codel_size;
         let y = (index / width) * codel_size;
         std::fmt::Write::write_fmt(
@@ -85,7 +103,7 @@ fn render_piet_easter_egg() -> String {
     }
 
     format!(
-        r#"<details class="piet-egg"><summary>Piet easter egg</summary><figure><svg role="img" aria-label="Magnified Piet boost oracle program" viewBox="0 0 {svg_width} {svg_height}" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges">{rectangles}</svg><figcaption>This is the actual image program from <code>piet/boost_oracle.ppm</code>. Read left to right, it pushes and outputs the boost value used by the game.</figcaption></figure></details>"#,
+        r#"<details class="piet-egg"><summary>Piet easter egg</summary><figure><svg role="img" aria-label="Magnified Piet boost oracle program" viewBox="0 0 {svg_width} {svg_height}" xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges">{rectangles}</svg><figcaption>This is the actual adaptive image program from <code>piet/boost_oracle.ppm</code>. It reads round, terrain, comeback gap, and energy, then computes <code>1 + (sum mod 4)</code> for a changing +1 to +4 boost.</figcaption></figure></details>"#,
         svg_width = width * codel_size,
         svg_height = height * codel_size,
         rectangles = rectangles,
@@ -147,6 +165,23 @@ mod tests {
     }
 
     #[test]
+    fn adaptive_piet_oracle_changes_with_inputs_and_stays_bounded() {
+        let source = include_str!("../piet/boost_oracle.ppm");
+        assert_eq!(
+            run_piet_source_with_inputs(source, &[1, 0, 0, 1]).unwrap(),
+            3
+        );
+        assert_eq!(
+            run_piet_source_with_inputs(source, &[2, 3, 1, 2]).unwrap(),
+            1
+        );
+        for round in 1..12 {
+            let value = run_piet_source_with_inputs(source, &[round, 2, 3, 1]).unwrap();
+            assert!((1..=4).contains(&value));
+        }
+    }
+
+    #[test]
     fn mobile_viewport_favicon_and_easter_egg_are_present() {
         let page = render_landing_page();
         assert!(page.contains("width=device-width"));
@@ -158,7 +193,12 @@ mod tests {
 
     #[test]
     fn track_uses_visible_symbols_and_fingerprint() {
-        let track = vec![segment("straight"), segment("curve"), segment("mud"), segment("jump")];
+        let track = vec![
+            segment("straight"),
+            segment("curve"),
+            segment("mud"),
+            segment("jump"),
+        ];
         let html = render_track(&track);
         assert!(html.contains("▰"));
         assert!(html.contains("◒"));
