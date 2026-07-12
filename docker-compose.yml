@@ -5,7 +5,9 @@ services:
     ports:
       - "${HOST_PORT:-8080}:8080"
     environment:
-      TRACK_SEED: "${TRACK_SEED:-42}"
+      # 0 generates a fresh R track on every container start. Set a positive
+      # integer to reproduce a specific circuit.
+      TRACK_SEED: "${TRACK_SEED:-0}"
       MAX_CONNECTIONS: "${MAX_CONNECTIONS:-128}"
       MAX_ROOMS: "${MAX_ROOMS:-1000}"
       ROOM_TTL_SECONDS: "${ROOM_TTL_SECONDS:-7200}"
@@ -14,8 +16,8 @@ services:
       - /tmp:size=16m,mode=1777,noexec,nosuid,nodev
     cap_drop:
       - ALL
-    security_opt:
-      - no-new-privileges:true
+    # Snap Docker rejects process execution when no-new-privileges is applied.
+    # The hardened production profile keeps this option for standard Docker Engine.
     pids_limit: 256
     mem_limit: 256m
     cpus: 1.0
