@@ -1,10 +1,10 @@
 # Crazy Race Game
 
 [![CI](https://github.com/Pepitodrop/CrazyRaceGame/actions/workflows/ci.yml/badge.svg)](https://github.com/Pepitodrop/CrazyRaceGame/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/badge/release-v1.0.2-blue.svg)](CHANGELOG.md)
+[![Release](https://img.shields.io/badge/release-v1.0.3-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-Crazy Race 1.0.2 is a Dockerized, browser-based **1v1 turn-based racing game** powered by Rust, R, TrumpScript, and Piet.
+Crazy Race 1.0.3 is a Dockerized, browser-based **1v1 turn-based racing game** powered by Rust, R, TrumpScript, and Piet.
 
 - **Rust** runs the HTTP server, rooms, game rules, HTML UI, security controls, and Piet interpreter.
 - **R** generates the 20-segment circuit when the container starts.
@@ -172,7 +172,7 @@ docker compose down
 
 ## Support boundary
 
-Crazy Race 1.0.2 is suitable for public release as a **single-instance hobby, demo, or small-community service** behind HTTPS. Rooms are held in memory and disappear after restart. Horizontal replicas require a shared transactional room store first.
+Crazy Race 1.0.3 is suitable for public release as a **single-instance hobby, demo, or small-community service** behind HTTPS. Rooms are held in memory and disappear after restart. Horizontal replicas require a shared transactional room store first.
 
 Player tokens are bearer credentials in game URLs. Public deployments must use HTTPS.
 
