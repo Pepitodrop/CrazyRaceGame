@@ -1,0 +1,43 @@
+name: Apply adaptive Piet migration
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    if: github.head_ref == 'agent/adaptive-piet-v1.1.0'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+
+      - name: Apply adaptive Piet source migration
+        run: python3 scripts/apply-adaptive-piet-migration.py
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.97.0
+          components: rustfmt, clippy
+
+      - name: Format and validate generated source
+        run: |
+          rustfmt --edition 2021 src/*.rs
+          cargo clippy --all-targets --locked -- -D warnings
+          cargo test --locked
+          cargo build --release --locked
+
+      - name: Commit generated implementation
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add src/part2.rs src/part4.rs src/part5.rs piet/boost_oracle.ppm Cargo.toml Cargo.lock Dockerfile README.md CHANGELOG.md docs/RELEASE_NOTES_v1.1.0.md scripts/smoke-test.sh
+          git commit -m 'feat: add adaptive Piet oracle for v1.1.0'
+          git push origin HEAD:${{ github.head_ref }}
