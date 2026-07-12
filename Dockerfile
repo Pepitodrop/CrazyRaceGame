@@ -1,4 +1,4 @@
-FROM rust:1.82-bookworm AS rust-builder
+FROM rust:1.97-bookworm AS rust-builder
 WORKDIR /build
 COPY Cargo.toml Cargo.lock ./
 COPY src ./src
@@ -22,7 +22,7 @@ RUN apt-get update \
        -e 's/NameConstant(/Constant(/g' \
        src/trumpscript/parser.py
 
-FROM r-base:4.4.2
+FROM r-base:4.6.1
 ARG APP_VERSION=1.0.0
 LABEL org.opencontainers.image.title="Crazy Race Game" \
       org.opencontainers.image.description="Server-rendered Rust, R, TrumpScript and Piet racing game" \
