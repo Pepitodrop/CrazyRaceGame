@@ -23,7 +23,9 @@ curl --fail --silent --show-error \
   "$base_url/"
 
 grep -q 'Local 1v1' "$temp_dir/landing.html"
+grep -q 'rel="icon"' "$temp_dir/landing.html"
 grep -qi '^content-security-policy:' "$temp_dir/landing.headers"
+grep -qi "^content-security-policy:.*img-src 'self' data:" "$temp_dir/landing.headers"
 grep -qi '^cache-control: no-store' "$temp_dir/landing.headers"
 grep -qi '^referrer-policy: no-referrer' "$temp_dir/landing.headers"
 grep -qi '^x-frame-options: DENY' "$temp_dir/landing.headers"
