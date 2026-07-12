@@ -1,0 +1,118 @@
+name: One-shot favicon fix
+
+on:
+  push:
+    branches:
+      - agent/fix-favicon-v1.0.3
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Apply favicon CSP fix and v1.0.3 metadata
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace(path: str, old: str, new: str, count: int = -1) -> None:
+              file = Path(path)
+              text = file.read_text()
+              if old not in text:
+                  raise SystemExit(f"Expected text not found in {path}: {old!r}")
+              file.write_text(text.replace(old, new, count))
+
+          replace(
+              "src/part3.rs",
+              "Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+              "Content-Security-Policy: default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+              1,
+          )
+          replace(
+              "src/part5.rs",
+              '<link rel="icon" href="data:image/svg+xml,',
+              '<link rel="icon" type="image/svg+xml" sizes="any" href="data:image/svg+xml,',
+              1,
+          )
+          replace(
+              "src/part5.rs",
+              'assert!(shell.contains("rel=\\"icon\\""));',
+              'assert!(shell.contains("rel=\\"icon\\" type=\\"image/svg+xml\\" sizes=\\"any\\""));\n        assert!(SECURITY_HEADERS.contains("img-src \'self\' data:"));',
+              1,
+          )
+          replace(
+              "src/part5.rs",
+              'assert!(SECURITY_HEADERS.contains("Content-Security-Policy:"));',
+              'assert!(SECURITY_HEADERS.contains("Content-Security-Policy:"));\n        assert!(SECURITY_HEADERS.contains("img-src \'self\' data:"));',
+              1,
+          )
+          replace(
+              "scripts/smoke-test.sh",
+              "grep -qi '^x-frame-options: DENY' \"$temp_dir/landing.headers\"",
+              "grep -qi '^x-frame-options: DENY' \"$temp_dir/landing.headers\"\ngrep -qi \"^content-security-policy:.*img-src 'self' data:\" \"$temp_dir/landing.headers\"\ngrep -q 'rel=\"icon\" type=\"image/svg+xml\" sizes=\"any\"' \"$temp_dir/landing.html\"",
+              1,
+          )
+
+          replace("Cargo.toml", 'version = "1.0.2"', 'version = "1.0.3"', 1)
+          replace("Cargo.lock", 'version = "1.0.2"', 'version = "1.0.3"', 1)
+          replace("Dockerfile", "ARG APP_VERSION=1.0.2", "ARG APP_VERSION=1.0.3", 1)
+          replace("README.md", "release-v1.0.2", "release-v1.0.3", 1)
+          replace("README.md", "Crazy Race 1.0.2", "Crazy Race 1.0.3", 1)
+
+          changelog = Path("CHANGELOG.md")
+          text = changelog.read_text()
+          marker = "No unreleased changes.\n"
+          entry = """
+
+          ## [1.0.3] - 2026-07-13
+
+          ### Fixed
+
+          - Allowed the embedded SVG favicon through the Content Security Policy so Firefox and other CSP-enforcing browsers display the Crazy Race tab icon.
+          - Declared the favicon MIME type and `sizes=\"any\"` explicitly.
+          - Added unit and running-container regression checks for favicon markup and CSP compatibility.
+          """.replace("          ", "")
+          if "## [1.0.3]" not in text:
+              text = text.replace(marker, marker + entry, 1)
+          text = text.replace(
+              "[Unreleased]: https://github.com/Pepitodrop/CrazyRaceGame/compare/v1.0.2...HEAD",
+              "[Unreleased]: https://github.com/Pepitodrop/CrazyRaceGame/compare/v1.0.3...HEAD\n[1.0.3]: https://github.com/Pepitodrop/CrazyRaceGame/compare/v1.0.2...v1.0.3",
+          )
+          changelog.write_text(text)
+
+          Path("docs/RELEASE_NOTES_v1.0.3.md").write_text("""# Crazy Race 1.0.3
+
+Crazy Race 1.0.3 fixes the browser-tab favicon in browsers that enforce the application's Content Security Policy.
+
+## Fixed
+
+- The embedded SVG favicon is now permitted by the `img-src` CSP directive.
+- The favicon link now declares `image/svg+xml` and `sizes=\"any\"` explicitly for Firefox compatibility.
+- CI now verifies both the favicon markup and the response security policy against the running container.
+
+## Upgrade
+
+```bash
+docker compose down --remove-orphans
+git pull --ff-only
+docker compose build --no-cache
+docker compose up
+```
+
+Firefox caches favicons aggressively. After upgrading, close and reopen the tab or press `Ctrl+Shift+R` once.
+""")
+
+          Path(".github/workflows/one-shot-favicon-fix.yml").unlink()
+      - name: Commit patch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: allow favicon under CSP and release v1.0.3"
+          git push origin HEAD:${GITHUB_REF_NAME}
