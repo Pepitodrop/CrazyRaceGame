@@ -39,6 +39,102 @@ git pull --ff-only
 docker compose up --build
 ```
 
+## How to play
+
+### Objective
+
+Both racers start at distance `0` with `5` energy. The circuit normally contains `20` numbered segments. The first racer to reach or pass the finish distance wins.
+
+The racer cards show:
+
+- **distance / finish**, for example `9 / 20`;
+- the racer's current **energy**;
+- a progress bar representing distance along the circuit.
+
+A racer may overshoot the finish, so a final value such as `25 / 20` is valid.
+
+### What happens in one round
+
+1. Both racers choose exactly one action.
+2. Each action is evaluated against the terrain the racer occupies at the **start** of that round.
+3. Both moves resolve together.
+4. The announcer panel reports what happened.
+5. If nobody has finished, the next round begins.
+
+The round badge at the top shows the **round you are about to play**. The text under the TrumpScript announcement usually summarizes the **previously completed round**. Therefore, seeing `Round 2` at the top and `Round 1: ...` in the result text is expected.
+
+### Local pass-and-play flow
+
+Local mode is designed for two people sharing one phone, tablet, or computer:
+
+1. Player 1 chooses an action.
+2. The page asks you to pass the device to Player 2.
+3. Player 1's action remains hidden.
+4. Player 2 chooses an action.
+5. The round resolves and the result becomes visible.
+6. The next round starts with Player 1 choosing first again.
+
+The screenshots that show `Player 1 move` at the start of every new round are therefore correct. The hidden Player 2 handover screen appears between those states.
+
+### Reading the circuit
+
+The numbered boxes are the complete R-generated circuit, not moving car markers. Racer position is shown by the distance values and progress bars above it.
+
+Terrain symbols mean:
+
+- `▰ straight`
+- `◒ curve`
+- `≈ mud`
+- `▲ jump`
+
+Terrain affects movement. Two racers can be on different segments in the same round, so their identical action choices may produce different results.
+
+### Choosing an action
+
+#### Accelerate
+
+- Reliable general-purpose movement.
+- Movement is based on the current segment's speed modifier.
+- Costs `1` energy.
+- Energy never falls below `0`.
+
+Use it when you want predictable progress and do not need to recover energy.
+
+#### Drift
+
+- Strongest on curves.
+- Receives a smaller bonus on mud.
+- Restores the recovery amount assigned to the current R-generated segment.
+- Energy is capped at `10`.
+
+Use it to rebuild energy or exploit a curve.
+
+#### Piet Boost
+
+- Requires at least `3` energy.
+- Costs `3` energy when successful.
+- Adds the value emitted by the Piet oracle, currently `3`, together with the current segment's speed and boost values.
+- Can move up to `9` segments in one round.
+
+If a racer selects Piet Boost with fewer than `3` energy, the boost fails: the racer moves only `1` segment and recovers `1` energy. The result text explicitly says that the racer lacked energy.
+
+### Winning and photo finishes
+
+- If only one racer reaches the finish during a round, that racer wins.
+- If both finish in the same round, the racer with the greater final distance wins.
+- If both finish on exactly the same distance, Crazy Race applies a deterministic room-and-round tie-breaker.
+
+This explains a result where both racers display `25 / 20` but only one is declared the winner. It is an intentional deterministic photo finish, not a browser-refresh bug or a newly generated random result.
+
+### Example round sequence
+
+Suppose Player 1 begins a round on a curve with enough energy and chooses Drift, while Player 2 chooses Piet Boost without enough energy:
+
+- Player 1 receives the curve bonus and recovers energy.
+- Player 2 moves only one segment and regains one energy because the boost failed.
+- The next page shows the updated distances and energy values.
+- The badge advances to the next round, while the announcer text describes the round that just finished.
+
 ## Production deployment
 
 The hardened production profile binds the application to loopback so it can sit behind a TLS reverse proxy:
@@ -85,7 +181,7 @@ The same server-rendered pages adapt to narrow screens:
 
 No mobile application installation is required.
 
-## Race rules
+## Race rules reference
 
 Each round, both racers choose one move:
 
