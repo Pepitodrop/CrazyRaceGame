@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 No unreleased changes.
 
+## [1.0.3] - 2026-07-13
+
+### Fixed
+
+- Allowed the embedded SVG favicon through the Content Security Policy so Firefox and other CSP-enforcing browsers display the Crazy Race tab icon.
+- Added regression coverage that checks the running container's CSP allows `data:` image icons.
+
 ## [1.0.2] - 2026-07-13
 
 ### Added
@@ -66,7 +73,8 @@ No unreleased changes.
 - Horizontal scaling is not supported until room state is moved to a shared transactional store.
 - Public deployments must terminate HTTPS at a reverse proxy because access tokens are bearer credentials contained in game URLs.
 
-[Unreleased]: https://github.com/Pepitodrop/CrazyRaceGame/compare/v1.0.2...HEAD
+[Unreleased]: https://github.com/Pepitodrop/CrazyRaceGame/compare/v1.0.3...HEAD
+[1.0.3]: https://github.com/Pepitodrop/CrazyRaceGame/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/Pepitodrop/CrazyRaceGame/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/Pepitodrop/CrazyRaceGame/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/Pepitodrop/CrazyRaceGame/releases/tag/v1.0.0
