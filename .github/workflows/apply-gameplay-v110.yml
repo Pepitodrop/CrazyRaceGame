@@ -1,0 +1,44 @@
+name: Apply gameplay clarity migration
+
+on:
+  push:
+    branches: [agent/gameplay-clarity-v1.1.0]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          fetch-depth: 0
+
+      - name: Apply source and documentation changes
+        run: |
+          python3 tools/apply_gameplay_core.py
+          python3 tools/apply_gameplay_ui4.py
+          python3 tools/apply_gameplay_ui5.py
+          python3 tools/apply_gameplay_ops.py
+          python3 tools/apply_gameplay_docs.py
+
+      - name: Install formatter
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30
+        with:
+          toolchain: 1.82.0
+          components: rustfmt
+
+      - name: Format and commit generated changes
+        run: |
+          set -euo pipefail
+          rustfmt --edition 2021 src/*.rs
+          git diff --check
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "Improve gameplay clarity and Snap Docker compatibility"
+          git push origin HEAD
