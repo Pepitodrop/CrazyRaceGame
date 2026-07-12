@@ -25,19 +25,11 @@ jobs:
           from pathlib import Path
           path = Path('src/part2.rs')
           text = path.read_text()
-          old = '''    SOURCE
-              .get_or_init(|| load_piet_program(PIET_PROGRAM))
-              .as_deref()
-              .map_err(str::to_string)
-          '''
-          new = '''    match SOURCE.get_or_init(|| load_piet_program(PIET_PROGRAM)) {
-              Ok(source) => Ok(source.as_str()),
-              Err(error) => Err(error.clone()),
-          }
-          '''
+          old = '.map_err(str::to_string)'
+          new = '.map_err(|error| error.clone())'
           if old not in text:
-              raise SystemExit('cached Piet source anchor not found')
-          path.write_text(text.replace(old, new))
+              raise SystemExit('cached Piet source conversion anchor not found')
+          path.write_text(text.replace(old, new, 1))
           PY
 
       - name: Install Rust toolchain
