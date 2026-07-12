@@ -19,7 +19,26 @@ jobs:
           fetch-depth: 0
 
       - name: Apply adaptive Piet source migration
-        run: python3 scripts/apply-adaptive-piet-migration.py
+        run: |
+          python3 scripts/apply-adaptive-piet-migration.py
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('src/part2.rs')
+          text = path.read_text()
+          old = '''    SOURCE
+              .get_or_init(|| load_piet_program(PIET_PROGRAM))
+              .as_deref()
+              .map_err(str::to_string)
+          '''
+          new = '''    match SOURCE.get_or_init(|| load_piet_program(PIET_PROGRAM)) {
+              Ok(source) => Ok(source.as_str()),
+              Err(error) => Err(error.clone()),
+          }
+          '''
+          if old not in text:
+              raise SystemExit('cached Piet source anchor not found')
+          path.write_text(text.replace(old, new))
+          PY
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
