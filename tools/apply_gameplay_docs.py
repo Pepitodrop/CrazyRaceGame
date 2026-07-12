@@ -65,12 +65,12 @@ readme.write_text(text)
 
 production = Path("docs/PRODUCTION.md")
 text = production.read_text()
-needle = "## Prerequisites\n"
+needle = "## 1. Configure\n"
 if needle not in text:
-    raise SystemExit("missing production prerequisites heading")
+    raise SystemExit("missing production configure heading")
 text = text.replace(
     needle,
-    '''## Docker package compatibility\n\nUbuntu's Snap-packaged Docker applies an AppArmor policy that can reject `no-new-privileges` container startup. The default `docker-compose.yml` omits that one flag so local development works with Snap Docker while retaining the non-root user, read-only filesystem, dropped capabilities, and resource limits.\n\nFor public production deployment, use Docker Engine from Docker's official packages or Docker Desktop and launch `compose.production.yml`, which retains `no-new-privileges`.\n\n## Prerequisites\n''',
+    '''## Docker package compatibility\n\nUbuntu's Snap-packaged Docker applies an AppArmor policy that can reject `no-new-privileges` container startup. The default `docker-compose.yml` omits that one flag so local development works with Snap Docker while retaining the non-root user, read-only filesystem, dropped capabilities, and resource limits.\n\nFor public production deployment, use Docker Engine from Docker's official packages or Docker Desktop and launch `compose.production.yml`, which retains `no-new-privileges`.\n\n## 1. Configure\n''',
     1,
 )
 production.write_text(text)
