@@ -9,7 +9,6 @@ services:
       MAX_CONNECTIONS: "${MAX_CONNECTIONS:-128}"
       MAX_ROOMS: "${MAX_ROOMS:-1000}"
       ROOM_TTL_SECONDS: "${ROOM_TTL_SECONDS:-7200}"
-    init: true
     read_only: true
     tmpfs:
       - /tmp:size=16m,mode=1777,noexec,nosuid,nodev

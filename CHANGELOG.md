@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 No unreleased changes.
 
+## [1.0.1] - 2026-07-12
+
+### Fixed
+
+- Removed Docker Compose's injected `/sbin/docker-init` process from local and production profiles. On some rootless or tightly sandboxed Docker installations it could not execute together with the non-root user, dropped capabilities, and `no-new-privileges`, causing an immediate restart loop.
+- Added CI coverage that launches the application through the actual default and production Compose profiles, rather than validating only an equivalent `docker run` command.
+
 ## [1.0.0] - 2026-07-12
 
 ### Added
@@ -36,5 +43,6 @@ No unreleased changes.
 - Horizontal scaling is not supported until room state is moved to a shared transactional store.
 - Public deployments must terminate HTTPS at a reverse proxy because access tokens are bearer credentials contained in game URLs.
 
-[Unreleased]: https://github.com/Pepitodrop/CrazyRaceGame/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/Pepitodrop/CrazyRaceGame/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/Pepitodrop/CrazyRaceGame/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/Pepitodrop/CrazyRaceGame/releases/tag/v1.0.0

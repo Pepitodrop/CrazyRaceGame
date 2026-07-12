@@ -17,7 +17,7 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -46,6 +46,7 @@ jobs:
           test -n "$version"
           grep -Fq "version = \"$version\"" Cargo.lock
           grep -Fq "## [$version]" CHANGELOG.md
+          test -s "docs/RELEASE_NOTES_v${version}.md"
 
           if [[ "${GITHUB_REF_TYPE:-}" == "tag" ]]; then
             test "${GITHUB_REF_NAME}" = "v${version}" || {
@@ -89,8 +90,10 @@ jobs:
       - name: Build release binary
         run: cargo build --release --locked
 
-      - name: Validate production Compose
-        run: docker compose -f compose.production.yml config --quiet
+      - name: Validate Compose profiles
+        run: |
+          docker compose config --quiet
+          docker compose -f compose.production.yml config --quiet
 
       - name: Build Docker image
         run: docker build -t crazy-race-game:ci .
@@ -111,25 +114,37 @@ jobs:
             crazy-race-game:ci --shut-up /app/announcer/race.tr | tee /tmp/announcer.txt
           test -s /tmp/announcer.txt
 
-      - name: Smoke-test hardened container
+      - name: Smoke-test local and production Compose profiles
         shell: bash
         run: |
-          docker run -d --name crazy-race-ci \
-            -p 127.0.0.1:18080:8080 \
-            --read-only \
-            --tmpfs /tmp:rw,noexec,nosuid,nodev,size=16m \
-            --cap-drop ALL \
-            --security-opt no-new-privileges \
-            --pids-limit 256 \
-            --memory 256m \
-            --cpus 1 \
-            crazy-race-game:ci
-          trap 'docker logs crazy-race-ci; docker rm -f crazy-race-ci' EXIT
-          for attempt in $(seq 1 30); do
-            if docker exec crazy-race-ci crazy-race-game --healthcheck; then
-              bash scripts/smoke-test.sh http://127.0.0.1:18080
-              exit 0
-            fi
-            sleep 1
-          done
-          exit 1
+          set -euo pipefail
+
+          cleanup() {
+            HOST_PORT=18081 docker compose -p crazy-race-local-ci down -v --remove-orphans || true
+            HOST_PORT=18082 docker compose -p crazy-race-production-ci -f compose.production.yml down -v --remove-orphans || true
+          }
+          trap cleanup EXIT
+
+          wait_for_health() {
+            local project="$1"
+            local compose_file="$2"
+            for attempt in $(seq 1 45); do
+              if HOST_PORT="$3" docker compose -p "$project" -f "$compose_file" \
+                exec -T crazy-race crazy-race-game --healthcheck; then
+                return 0
+              fi
+              sleep 1
+            done
+            HOST_PORT="$3" docker compose -p "$project" -f "$compose_file" ps
+            HOST_PORT="$3" docker compose -p "$project" -f "$compose_file" logs
+            return 1
+          }
+
+          HOST_PORT=18081 docker compose -p crazy-race-local-ci up -d --build
+          wait_for_health crazy-race-local-ci docker-compose.yml 18081
+          bash scripts/smoke-test.sh http://127.0.0.1:18081
+          HOST_PORT=18081 docker compose -p crazy-race-local-ci down -v --remove-orphans
+
+          HOST_PORT=18082 docker compose -p crazy-race-production-ci -f compose.production.yml up -d --build
+          wait_for_health crazy-race-production-ci compose.production.yml 18082
+          bash scripts/smoke-test.sh http://127.0.0.1:18082
