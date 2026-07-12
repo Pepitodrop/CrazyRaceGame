@@ -23,7 +23,7 @@ RUN apt-get update \
        src/trumpscript/parser.py
 
 FROM r-base:4.6.1
-ARG APP_VERSION=1.0.1
+ARG APP_VERSION=1.0.2
 LABEL org.opencontainers.image.title="Crazy Race Game" \
       org.opencontainers.image.description="Server-rendered Rust, R, TrumpScript and Piet racing game" \
       org.opencontainers.image.version="${APP_VERSION}" \
@@ -47,7 +47,7 @@ RUN chmod 0555 /usr/local/bin/crazy-race-game /opt/trumpscript/bin/TRUMP \
     && test -s /tmp/trumpscript-check.txt \
     && rm /tmp/trumpscript-check.txt
 ENV BIND_ADDRESS=0.0.0.0:8080 \
-    TRACK_SEED=42 \
+    TRACK_SEED=0 \
     MAX_CONNECTIONS=128 \
     MAX_ROOMS=1000 \
     ROOM_TTL_SECONDS=7200 \
