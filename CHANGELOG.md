@@ -8,6 +8,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 No unreleased changes.
 
+## [1.0.2] - 2026-07-13
+
+### Added
+
+- Browser tab favicon.
+- Visible terrain symbols inside each circuit segment and a larger color-coded legend.
+- Track fingerprint for identifying the generated circuit.
+- Magnified Piet image-program easter egg at the bottom of every page.
+- Separate energy meter, current-segment details, terrain status, and explicit action formulas.
+
+### Changed
+
+- The default track seed is now `0`, which generates a fresh circuit on each container start. Positive seeds remain reproducible.
+- The race counter is clamped to the finish distance while an overshoot finish score is shown separately.
+- Piet Boost is disabled in the normal UI when the racer has fewer than three energy.
+- The default local Compose profile omits `no-new-privileges` for Snap Docker compatibility while keeping the non-root user, read-only filesystem, dropped capabilities, and resource limits. The production profile remains hardened for standard Docker Engine.
+
+### Fixed
+
+- Clarified track colors, symbols, energy changes, and segment progression directly in the game UI.
+- Prevented confusing values such as `25 / 20` in the primary segment counter.
+- Replaced the fixed default track with a fresh generated track after every container restart.
+
 ## [1.0.1] - 2026-07-12
 
 ### Fixed
@@ -43,6 +66,7 @@ No unreleased changes.
 - Horizontal scaling is not supported until room state is moved to a shared transactional store.
 - Public deployments must terminate HTTPS at a reverse proxy because access tokens are bearer credentials contained in game URLs.
 
-[Unreleased]: https://github.com/Pepitodrop/CrazyRaceGame/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/Pepitodrop/CrazyRaceGame/compare/v1.0.2...HEAD
+[1.0.2]: https://github.com/Pepitodrop/CrazyRaceGame/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/Pepitodrop/CrazyRaceGame/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/Pepitodrop/CrazyRaceGame/releases/tag/v1.0.0
