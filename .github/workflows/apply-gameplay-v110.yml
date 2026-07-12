@@ -29,6 +29,16 @@ jobs:
         run: python3 tools/apply_gameplay_ops.py
       - name: Apply documentation and cleanup
         run: python3 tools/apply_gameplay_docs.py
+      - name: Fix Piet SVG raw-string delimiter
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('src/part4.rs')
+          text = path.read_text()
+          text = text.replace('r#"<details class="card piet-easter-egg">', 'r##"<details class="card piet-easter-egg">', 1)
+          text = text.replace('</details>"#.to_string()', '</details>"##.to_string()', 1)
+          path.write_text(text)
+          PY
       - name: Install formatter
         uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30
         with:
