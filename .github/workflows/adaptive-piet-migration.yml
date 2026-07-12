@@ -29,7 +29,12 @@ jobs:
           new = '.map_err(|error| error.clone())'
           if old not in text:
               raise SystemExit('cached Piet source conversion anchor not found')
-          path.write_text(text.replace(old, new, 1))
+          text = text.replace(old, new, 1)
+          wrapper = 'fn run_piet_source(source: &str) -> Result<i32, String> {'
+          if wrapper not in text:
+              raise SystemExit('Piet test wrapper anchor not found')
+          text = text.replace(wrapper, '#[cfg(test)]\n' + wrapper, 1)
+          path.write_text(text)
           PY
 
       - name: Install Rust toolchain
