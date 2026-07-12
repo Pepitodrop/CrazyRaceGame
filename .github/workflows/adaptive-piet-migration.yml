@@ -27,14 +27,48 @@ jobs:
           toolchain: 1.97.0
           components: rustfmt, clippy
 
-      - name: Format and validate generated source
+      - name: Format generated source
+        run: rustfmt --edition 2021 src/*.rs
+
+      - name: Validate generated source
+        id: validate
+        shell: bash
         run: |
-          rustfmt --edition 2021 src/*.rs
-          cargo clippy --all-targets --locked -- -D warnings
-          cargo test --locked
-          cargo build --release --locked
+          set +e
+          cargo clippy --all-targets --locked -- -D warnings > migration-validation.log 2>&1
+          clippy_status=$?
+          if [ "$clippy_status" -eq 0 ]; then
+            cargo test --locked >> migration-validation.log 2>&1
+            test_status=$?
+          else
+            test_status=1
+          fi
+          if [ "$clippy_status" -eq 0 ] && [ "$test_status" -eq 0 ]; then
+            cargo build --release --locked >> migration-validation.log 2>&1
+            build_status=$?
+          else
+            build_status=1
+          fi
+          cat migration-validation.log
+          if [ "$clippy_status" -ne 0 ] || [ "$test_status" -ne 0 ] || [ "$build_status" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Upload migration diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: adaptive-piet-migration
+          path: |
+            migration-validation.log
+            src/part2.rs
+            src/part4.rs
+            src/part5.rs
+            piet/boost_oracle.ppm
+          if-no-files-found: warn
 
       - name: Commit generated implementation
+        if: success()
         run: |
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
