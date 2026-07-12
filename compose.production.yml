@@ -10,7 +10,6 @@ services:
       MAX_ROOMS: "${MAX_ROOMS:-1000}"
       ROOM_TTL_SECONDS: "${ROOM_TTL_SECONDS:-7200}"
     user: "10001:10001"
-    init: true
     read_only: true
     tmpfs:
       - /tmp:size=16m,mode=1777,noexec,nosuid,nodev
