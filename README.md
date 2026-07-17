@@ -1,5 +1,7 @@
 # Crazy Race Game
 
+Play this game online at **[game.luisbenedikt.de](https://game.luisbenedikt.de/)**.
+
 [![CI](https://github.com/Pepitodrop/CrazyRaceGame/actions/workflows/ci.yml/badge.svg)](https://github.com/Pepitodrop/CrazyRaceGame/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/badge/release-v1.1.0-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
